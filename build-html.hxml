@@ -1,0 +1,6 @@
+-cp src
+--main Main
+--js html/app.js
+-D markup_html
+-D markup_debug
+--debug
