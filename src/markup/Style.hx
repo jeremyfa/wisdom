@@ -22,7 +22,7 @@ abstract Style(DynamicAccess<Any>) from DynamicAccess<Any> to DynamicAccess<Any>
     }
 
     public inline function set(style:String, value:String):Void {
-        return this.set(style, value);
+        this.set(style, value);
     }
 
     public inline function keys() {

@@ -1,10 +1,11 @@
 package markup;
 
+import haxe.Constraints.Function;
 #if markup_html
 
 import js.Browser.document;
 
-class HtmlDomApi extends DomApi {
+class HtmlBackend extends Backend {
 
     public function new() {}
 
@@ -196,21 +197,43 @@ class HtmlDomApi extends DomApi {
 
     }
 
-    public function elementAttribute(elm:Element, attr:String):Null<String> {
+    public function attribute(elm:Element, attr:String):Null<String> {
 
         final elmHtml:js.html.Element = cast elm;
         return elmHtml.getAttribute(attr);
 
     }
 
-    public function elementSetAttribute(elm:Element, attr:String, value:String #if markup_debug , ?pos:haxe.PosInfos #end):Void {
+    public function setAttribute(elm:Element, attr:String, value:String #if markup_debug , ?pos:haxe.PosInfos #end):Void {
 
         #if markup_debug
-        haxe.Log.trace('elementSetAttribute($elm, $attr, $value)', pos);
+        haxe.Log.trace('setAttribute($elm, $attr, $value)', pos);
         #end
 
         final elmHtml:js.html.Element = cast elm;
         elmHtml.setAttribute(attr, value);
+
+    }
+
+    public function removeAttribute(elm:Element, attr:String #if markup_debug , ?pos:haxe.PosInfos #end):Void {
+
+        #if markup_debug
+        haxe.Log.trace('removeAttribute($elm, $attr)', pos);
+        #end
+
+        final elmHtml:js.html.Element = cast elm;
+        elmHtml.removeAttribute(attr);
+
+    }
+
+    public function setProp(elm:Element, name:String, value:Any #if markup_debug , ?pos:haxe.PosInfos #end):Void {
+
+        #if markup_debug
+        haxe.Log.trace('setProp($elm, $name, $value)', pos);
+        #end
+
+        final elmHtml:js.html.Element = cast elm;
+        js.Syntax.code('{0}.{1} = {2}', elmHtml, name, value);
 
     }
 
@@ -237,6 +260,34 @@ class HtmlDomApi extends DomApi {
         return cast {
             'is': data.isa
         };
+
+    }
+
+    public function isAttribute(sel:String, name:String):Bool {
+
+        return HtmlAttributes.isValidAttribute(sel, name);
+
+    }
+
+    public function addEventListener(elm:Element, event:String, listener:Function #if markup_debug , ?pos:haxe.PosInfos #end):Void {
+
+        #if markup_debug
+        haxe.Log.trace('addEventListener($elm, $event, $listener)', pos);
+        #end
+
+        final elmHtml:js.html.Element = cast elm;
+        elmHtml.addEventListener(event, listener, false);
+
+    }
+
+    public function removeEventListener(elm:Element, event:String, listener:Function #if markup_debug , ?pos:haxe.PosInfos #end):Void {
+
+        #if markup_debug
+        haxe.Log.trace('removeEventListener($elm, $event, $listener)', pos);
+        #end
+
+        final elmHtml:js.html.Element = cast elm;
+        elmHtml.removeEventListener(event, listener, false);
 
     }
 

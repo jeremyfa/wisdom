@@ -1,4 +1,4 @@
-package markup;
+package markup.modules;
 
 class ClassModule {
 
@@ -25,7 +25,7 @@ class ClassModule {
             for (name in oldClass.toArray()) {
                 if (klass == null || !klass.contains(name)) {
                     // was `true` and now not provided
-                    markup.api.removeClass(elm, name);
+                    markup.backend.removeClass(elm, name);
                 }
             }
         }
@@ -33,7 +33,7 @@ class ClassModule {
         if (klass != null) {
             for (name in klass.toArray()) {
                 if (oldClass == null || !oldClass.contains(name)) {
-                    markup.api.addClass(elm, name);
+                    markup.backend.addClass(elm, name);
                 }
             }
         }

@@ -1,6 +1,8 @@
 package markup;
 
-abstract class DomApi {
+import haxe.Constraints.Function;
+
+abstract class Backend {
 
     abstract public function createElement(tagName:String, ?options:CreateElementOptions #if markup_debug , ?pos:haxe.PosInfos #end):Element;
 
@@ -42,9 +44,15 @@ abstract class DomApi {
 
     abstract public function elementId(elm:Element):Null<String>;
 
-    abstract public function elementAttribute(elm:Element, attr:String):Null<String>;
+    abstract public function attribute(elm:Element, attr:String):Null<String>;
 
-    abstract public function elementSetAttribute(elm:Element, attr:String, value:String #if markup_debug , ?pos:haxe.PosInfos #end):Void;
+    abstract public function setAttribute(elm:Element, attr:String, value:String #if markup_debug , ?pos:haxe.PosInfos #end):Void;
+
+    abstract public function removeAttribute(elm:Element, attr:String #if markup_debug , ?pos:haxe.PosInfos #end):Void;
+
+    abstract public function isAttribute(sel:String, name:String):Bool;
+
+    abstract public function setProp(elm:Element, name:String, value:Any #if markup_debug , ?pos:haxe.PosInfos #end):Void;
 
     abstract public function elementToNode(elm:Element):Node;
 
@@ -53,5 +61,9 @@ abstract class DomApi {
     abstract public function commentToNode(comment:Comment):Node;
 
     abstract public function vnodeDataToCreateElementOptions(data:VNodeData):CreateElementOptions;
+
+    abstract public function addEventListener(elm:Element, event:String, listener:Function #if markup_debug , ?pos:haxe.PosInfos #end):Void;
+
+    abstract public function removeEventListener(elm:Element, event:String, listener:Function #if markup_debug , ?pos:haxe.PosInfos #end):Void;
 
 }

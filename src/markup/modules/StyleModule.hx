@@ -1,4 +1,4 @@
-package markup;
+package markup.modules;
 
 class StyleModule {
 
@@ -24,14 +24,14 @@ class StyleModule {
         if (oldStyle != null) {
             for (name in oldStyle.keys()) {
                 if (style == null || !style.exists(name)) {
-                    markup.api.removeStyle(elm, name);
+                    markup.backend.removeStyle(elm, name);
                 }
             }
         }
         if (style != null) {
             for (name => value in style) {
                 if (oldStyle == null || !oldStyle.exists(name) || oldStyle.get(name) != value) {
-                    markup.api.setStyle(elm, name, value);
+                    markup.backend.setStyle(elm, name, value);
                 }
             }
         }

@@ -10,11 +10,11 @@ class Markup {
 
     final cbs = new ModuleHooks();
 
-    public var api(default, null):DomApi;
+    public var backend(default, null):Backend;
 
-    public function new(modules:Array<Module>, api:DomApi) {
+    public function new(modules:Array<Module>, backend:Backend) {
 
-        this.api = api;
+        this.backend = backend;
 
         for (module in modules) {
             if (module.create != null) {
@@ -75,20 +75,20 @@ class Markup {
 
     function emptyNodeAt(elm:Element):VNode {
 
-        var elementId = api.elementId(elm);
+        var elementId = backend.elementId(elm);
         final id = elementId != null && elementId.length > 0 ? "#" + elementId : "";
 
         // elm.className doesn't return a string when elm is an SVG element inside a shadowRoot.
         // https://stackoverflow.com/questions/29454340/detecting-classname-of-svganimatedstring
-        final classes:Null<String> = api.elementAttribute(elm, "class");
+        final classes:Null<String> = backend.attribute(elm, "class");
 
         final c:String = classes != null ? "." + classes.split(" ").join(".") : "";
         return VNode.vnode(
-            api.tagName(elm).toLowerCase() + id + c,
+            backend.tagName(elm).toLowerCase() + id + c,
             {},
             [],
             null,
-            api.elementToNode(elm)
+            backend.elementToNode(elm)
         );
 
     }
@@ -97,9 +97,9 @@ class Markup {
 
         return function() {
             if (--listeners == 0) {
-                final parent:Null<Node> = api.parentNode(childElm);
+                final parent:Null<Node> = backend.parentNode(childElm);
                 if (parent != null) {
-                    api.removeChild(parent, childElm);
+                    backend.removeChild(parent, childElm);
                 }
             }
         };
@@ -118,11 +118,11 @@ class Markup {
         final sel = vnode.sel;
         if (sel == "!") {
             if (vnode.text == null) vnode.text = "";
-            vnode.elm = api.commentToNode(api.createComment(vnode.text));
+            vnode.elm = backend.commentToNode(backend.createComment(vnode.text));
         }
         else if (sel == "") {
             // textNode has no selector
-            vnode.elm = api.textToNode(api.createTextNode(vnode.text));
+            vnode.elm = backend.textToNode(backend.createTextNode(vnode.text));
         }
         else if (sel != null) {
             // Parse selector
@@ -137,25 +137,25 @@ class Markup {
             final ns = data?.ns;
             final elm =
                 ns == null
-                    ? api.createElement(tag, api.vnodeDataToCreateElementOptions(data))
-                    : api.createElementNS(ns, tag, api.vnodeDataToCreateElementOptions(data));
-            vnode.elm = api.elementToNode(elm);
-            if (hash < dot) api.elementSetAttribute(elm, "id", sel.substring(hash + 1, dot));
+                    ? backend.createElement(tag, backend.vnodeDataToCreateElementOptions(data))
+                    : backend.createElementNS(ns, tag, backend.vnodeDataToCreateElementOptions(data));
+            vnode.elm = backend.elementToNode(elm);
+            if (hash < dot) backend.setAttribute(elm, "id", sel.substring(hash + 1, dot));
             if (dotIdx > 0)
-                api.elementSetAttribute(elm, "class", sel.substring(dot + 1).replace(".", " "));
+                backend.setAttribute(elm, "class", sel.substring(dot + 1).replace(".", " "));
             for (i in 0...cbs.create.length) cbs.create[i](this, EMPTY_NODE, vnode);
             if (
                 Is.primitive(vnode.text) &&
                 (!Is.array(children) || children.length == 0)
             ) {
                 // allow h1 and similar nodes to be created w/ text and empty child list
-                api.appendChild(api.elementToNode(elm), api.textToNode(api.createTextNode(vnode.text)));
+                backend.appendChild(backend.elementToNode(elm), backend.textToNode(backend.createTextNode(vnode.text)));
             }
             if (Is.array(children)) {
                 for (i in 0...children.length) {
                     final ch = children[i];
                     if (ch != null) {
-                        api.appendChild(api.elementToNode(elm), createElm(ch, insertedVnodeQueue));
+                        backend.appendChild(backend.elementToNode(elm), createElm(ch, insertedVnodeQueue));
                     }
                 }
             }
@@ -169,7 +169,7 @@ class Markup {
             }
         }
         else {
-            vnode.elm = api.textToNode(api.createTextNode(vnode.text));
+            vnode.elm = backend.textToNode(backend.createTextNode(vnode.text));
         }
 
         return vnode.elm;
@@ -188,7 +188,7 @@ class Markup {
         while (startIdx <= endIdx) {
             final ch = vnodes[startIdx];
             if (ch != null) {
-                api.insertBefore(parentElm, createElm(ch, insertedVnodeQueue), before);
+                backend.insertBefore(parentElm, createElm(ch, insertedVnodeQueue), before);
             }
             startIdx++;
         }
@@ -248,7 +248,7 @@ class Markup {
                     );
                 } else {
                     // Text node
-                    api.removeChild(parentElm, ch.elm);
+                    backend.removeChild(parentElm, ch.elm);
                 }
             }
             startIdx++;
@@ -302,10 +302,10 @@ class Markup {
             else if (sameVnode(oldStartVnode, newEndVnode)) {
                 // Vnode moved right
                 patchVnode(oldStartVnode, newEndVnode, insertedVnodeQueue);
-                api.insertBefore(
+                backend.insertBefore(
                     parentElm,
                     oldStartVnode.elm,
-                    api.nextSibling(oldEndVnode.elm)
+                    backend.nextSibling(oldEndVnode.elm)
                 );
                 oldStartVnode = oldCh[++oldStartIdx];
                 newEndVnode = newCh[--newEndIdx];
@@ -313,7 +313,7 @@ class Markup {
             else if (sameVnode(oldEndVnode, newStartVnode)) {
                 // Vnode moved left
                 patchVnode(oldEndVnode, newStartVnode, insertedVnodeQueue);
-                api.insertBefore(parentElm, oldEndVnode.elm, oldStartVnode.elm);
+                backend.insertBefore(parentElm, oldEndVnode.elm, oldStartVnode.elm);
                 oldEndVnode = oldCh[--oldEndIdx];
                 newStartVnode = newCh[++newStartIdx];
             }
@@ -324,7 +324,7 @@ class Markup {
                 idxInOld = oldKeyToIdx.get(newStartVnode.key);
                 if (idxInOld == null) {
                     // `newStartVnode` is new, create and insert it in beginning
-                    api.insertBefore(
+                    backend.insertBefore(
                         parentElm,
                         createElm(newStartVnode, insertedVnodeQueue),
                         oldStartVnode.elm
@@ -333,10 +333,10 @@ class Markup {
                 }
                 else if (oldKeyToIdx.get(newEndVnode.key) == null) {
                     // `newEndVnode` is new, create and insert it in the end
-                    api.insertBefore(
+                    backend.insertBefore(
                         parentElm,
                         createElm(newEndVnode, insertedVnodeQueue),
-                        api.nextSibling(oldEndVnode.elm)
+                        backend.nextSibling(oldEndVnode.elm)
                     );
                     newEndVnode = newCh[--newEndIdx];
                 }
@@ -345,7 +345,7 @@ class Markup {
                     // moving `newStartVnode` into position
                     elmToMove = oldCh[idxInOld];
                     if (elmToMove.sel != newStartVnode.sel) {
-                        api.insertBefore(
+                        backend.insertBefore(
                             parentElm,
                             createElm(newStartVnode, insertedVnodeQueue),
                             oldStartVnode.elm
@@ -354,7 +354,7 @@ class Markup {
                     else {
                         patchVnode(elmToMove, newStartVnode, insertedVnodeQueue);
                         oldCh[idxInOld] = null;
-                        api.insertBefore(parentElm, elmToMove.elm, oldStartVnode.elm);
+                        backend.insertBefore(parentElm, elmToMove.elm, oldStartVnode.elm);
                     }
                     newStartVnode = newCh[++newStartIdx];
                 }
@@ -409,21 +409,21 @@ class Markup {
                 if (oldCh != ch) updateChildren(elm, oldCh, ch, insertedVnodeQueue);
             }
             else if (ch != null) {
-                if (oldVnode.text != null) api.setTextContent(elm, "");
+                if (oldVnode.text != null) backend.setTextContent(elm, "");
                 addVnodes(elm, null, ch, 0, ch.length - 1, insertedVnodeQueue);
             }
             else if (oldCh != null) {
                 removeVnodes(elm, oldCh, 0, oldCh.length - 1);
             }
             else if (oldVnode.text != null) {
-                api.setTextContent(elm, "");
+                backend.setTextContent(elm, "");
             }
         }
         else if (oldVnode.text != vnode.text) {
             if (oldCh != null) {
                 removeVnodes(elm, oldCh, 0, oldCh.length - 1);
             }
-            api.setTextContent(elm, vnode.text);
+            backend.setTextContent(elm, vnode.text);
         }
         final postpatch = hook?.postpatch;
         if (postpatch != null)
@@ -475,7 +475,7 @@ class Markup {
         final insertedVnodeQueue:VNodeQueue = [];
         for (i in 0...cbs.pre.length) cbs.pre[i](this);
 
-        if (api.isElement(oldVnodeRaw)) {
+        if (backend.isElement(oldVnodeRaw)) {
             oldVnode = emptyNodeAt(oldVnodeRaw);
         }
         else {
@@ -487,12 +487,12 @@ class Markup {
         }
         else {
             elm = oldVnode.elm;
-            parent = api.parentNode(elm);
+            parent = backend.parentNode(elm);
 
             createElm(vnode, insertedVnodeQueue);
 
             if (parent != null) {
-                api.insertBefore(parent, vnode.elm, api.nextSibling(elm));
+                backend.insertBefore(parent, vnode.elm, backend.nextSibling(elm));
                 removeVnodes(parent, [oldVnode], 0, 0);
             }
         }
