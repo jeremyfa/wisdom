@@ -6,7 +6,6 @@ class VNodeData {
     public var attrs:Attrs = null;
     public var classes:Classes = null;
     public var style:Style = null;
-    public var dataset:Dataset = null;
     public var on:On = null;
     public var attachData:AttachData = null;
     public var hook:Hooks = null;

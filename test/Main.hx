@@ -45,7 +45,7 @@ function main() {
                 },
                 classes: 'one two ticks-' + ticks,
                 props: {
-                    align: ticks % 2 == 0 ? 'left' : null,
+                    align: ticks % 2 == 0 ? 'right' : null,
                     valign: 'top'
                 },
                 on: {
