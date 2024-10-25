@@ -4,7 +4,7 @@
     "license": "MIT",
     "tags": ["virtual", "dom", "vdom", "virtualdom", "react", "snabbdom"],
     "description": "A Haxe port of snabbdom, a virtual DOM library with a focus on simplicity, modularity, powerful features and performance.",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "classPath": "src/",
     "releasenote": "Initial port of snabbdom core (not ready to use yet!)",
     "contributors": ["jeremyfa"],
