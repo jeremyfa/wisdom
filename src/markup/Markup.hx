@@ -1,14 +1,33 @@
 package markup;
 
+import haxe.DynamicAccess;
+import haxe.Int64;
+
 using StringTools;
 
-class Markup {
+#if macro
+import haxe.macro.Context;
+import haxe.macro.Expr;
+import haxe.macro.ExprTools;
+import haxe.macro.PositionTools;
+#end
 
-    static final EMPTY_NODE = VNode.vnode("", {}, [], null, null);
+#if tracker
+@:using(markup.Reactive)
+#end
+class Markup implements X {
+
+    #if !macro
+
+    static final EMPTY_NODE = VNode.vnode(null, "", {}, [], null, null);
 
     static final SVG_NS = "http://www.w3.org/2000/svg";
 
     final cbs = new ModuleHooks();
+
+    public static var renderComponent:RenderComponent = null;
+
+    public static var baseXid:Xid = null;
 
     public var backend(default, null):Backend;
 
@@ -35,6 +54,52 @@ class Markup {
             if (module.post != null) {
                 cbs.post.push(module.post);
             }
+        }
+
+    }
+
+    public function addModule(module:Module) {
+
+        if (module.create != null) {
+            cbs.create.push(module.create);
+        }
+        if (module.update != null) {
+            cbs.update.push(module.update);
+        }
+        if (module.remove != null) {
+            cbs.remove.push(module.remove);
+        }
+        if (module.destroy != null) {
+            cbs.destroy.push(module.destroy);
+        }
+        if (module.pre != null) {
+            cbs.pre.push(module.pre);
+        }
+        if (module.post != null) {
+            cbs.post.push(module.post);
+        }
+
+    }
+
+    public function removeModule(module:Module) {
+
+        if (module.create != null) {
+            cbs.create.remove(module.create);
+        }
+        if (module.update != null) {
+            cbs.update.remove(module.update);
+        }
+        if (module.remove != null) {
+            cbs.remove.remove(module.remove);
+        }
+        if (module.destroy != null) {
+            cbs.destroy.remove(module.destroy);
+        }
+        if (module.pre != null) {
+            cbs.pre.remove(module.pre);
+        }
+        if (module.post != null) {
+            cbs.post.remove(module.post);
         }
 
     }
@@ -84,6 +149,7 @@ class Markup {
 
         final c:String = classes != null ? "." + classes.split(" ").join(".") : "";
         return VNode.vnode(
+            null,
             backend.tagName(elm).toLowerCase() + id + c,
             {},
             [],
@@ -431,6 +497,17 @@ class Markup {
 
     }
 
+    #if completion
+
+    public function patch(
+        oldVnode:Any,
+        vnode:Any
+    ):VNode {
+        return null;
+    }
+
+    #else
+
     #if markup_html
 
     public extern inline overload function patch(
@@ -506,11 +583,172 @@ class Markup {
 
     }
 
-    public extern inline static overload function h(sel:Any, ?b:Any, ?c:Any):VNode {
-        return _h(sel, b, c);
+    #end
+
+    static var iteratorStack:Array<Array<Int>> = [];
+
+    static var currentIterator:Array<Int> = null;
+
+    static var iteratorKeysStack:Array<Array<String>> = [];
+
+    static var currentIteratorKeys:Array<String> = null;
+
+    public static function begin():Void {
+
+        currentIterator = [];
+        currentIteratorKeys = [];
+        iteratorStack.push(currentIterator);
+        iteratorKeysStack.push(currentIteratorKeys);
+
     }
 
-    static function _h(sel:Any, ?b:Any, ?c:Any):VNode {
+    public static function end():Void {
+
+        iteratorStack.pop();
+        iteratorKeysStack.pop();
+        final len = iteratorStack.length;
+        if (len > 0) {
+            currentIterator = iteratorStack[len-1];
+            currentIteratorKeys = iteratorKeysStack[len-1];
+        }
+        else {
+            currentIterator = null;
+            currentIteratorKeys = null;
+        }
+
+    }
+
+    public static function iPush():Void {
+
+        currentIterator.push(-1);
+        currentIteratorKeys.push(null);
+
+    }
+
+    public static function iIter():Int {
+
+        final index = currentIterator.length - 1;
+        final n = currentIterator[index];
+        final i = (n + 1);
+        currentIterator[index] = i;
+        currentIteratorKeys[index] = null;
+        return i;
+
+    }
+
+    public static function iKey(key:String):Void {
+
+        final index = currentIteratorKeys.length - 1;
+        currentIteratorKeys[index] = key;
+
+    }
+
+    public static function iStr(index:Int):String {
+
+        var key = currentIteratorKeys[index];
+        return key ?? '#'+currentIterator[index];
+
+    }
+
+    public static function iPop():Void {
+
+        currentIterator.pop();
+        currentIteratorKeys.pop();
+
+    }
+
+    #if completion
+
+    public static function c(xid:Xid, comp:Any, ?b:Any, ?c:Any):Any {
+
+        return null;
+    }
+
+    #else
+
+    public static function c(xid:Xid, comp:Any, ?b:Any, ?c:Any):Any {
+
+        var data:VNodeData = null;
+        var children:Any = null;
+        var text:Any = null;
+
+        if (c != null) {
+
+            if (b != null) {
+                data = b;
+            }
+
+            if (Is.array(c)) {
+                children = c;
+            }
+            else if (Is.primitive(c)) {
+                text = Std.string(c);
+            }
+            else if (c != null && (c is VNodeData || c is VNode)) {
+                children = [c];
+            }
+        }
+        else if (b != null) {
+            if (Is.array(b)) {
+                children = b;
+            }
+            else if (Is.primitive(b)) {
+                text = Std.string(b);
+            }
+            else {
+                data = b;
+            }
+        }
+
+        if ((children == null || (children:Array<Any>).length == 0) && text != null) {
+            children = [
+                VNode.vnode(
+                    null,
+                    null,
+                    null,
+                    null,
+                    text,
+                    null
+                )
+            ];
+        }
+        else if (children != null) {
+            children = cleanChildren(children);
+            final childrenArray:Array<Any> = children;
+            for (i in 0...childrenArray.length) {
+                if (Is.primitive(childrenArray[i]))
+                    childrenArray[i] = VNode.vnode(
+                        null,
+                        null,
+                        null,
+                        null,
+                        childrenArray[i],
+                        null
+                    );
+            }
+        }
+
+        var computedXid = xid;
+        if (baseXid != null) {
+            computedXid = baseXid + xid;
+        }
+
+        if (renderComponent != null) {
+            return renderComponent(comp, computedXid, data, children);
+        }
+        else {
+            final _comp:(xid:Xid, ctx:ReactiveContext, data:VNodeData, children:Array<VNode>)->Any = comp;
+            return _comp(computedXid, null, data, children);
+        }
+    }
+
+    #end
+
+    public extern inline static overload function h(xid:Xid, sel:Any, ?b:Any, ?c:Any):Any {
+        return _h(xid, sel, b, c);
+    }
+
+    static function _h(xid:Xid, sel:Any, ?b:Any, ?c:Any):Any {
 
         var data:VNodeData = null;
         var children:Any = null;
@@ -525,7 +763,7 @@ class Markup {
             else if (Is.primitive(c)) {
                 text = Std.string(c);
             }
-            else if (c != null && c is VNodeData) {
+            else if (c != null && (c is VNodeData || c is VNode)) {
                 children = [c];
             }
         }
@@ -536,9 +774,9 @@ class Markup {
             else if (Is.primitive(b)) {
                 text = Std.string(b);
             }
-            else if (b is VNodeData || b is VNode) {
-                children = [b];
-            }
+            // else if (b is VNodeData || b is VNode) {
+            //     children = [b];
+            // }
             else {
                 data = b;
             }
@@ -547,10 +785,12 @@ class Markup {
             data = {};
         }
         if (children != null) {
+            children = cleanChildren(children);
             final childrenArray:Array<Any> = children;
             for (i in 0...childrenArray.length) {
                 if (Is.primitive(childrenArray[i]))
                     childrenArray[i] = VNode.vnode(
+                        null,
                         null,
                         null,
                         null,
@@ -559,6 +799,7 @@ class Markup {
                     );
             }
         }
+
         if (
             (sel:String).startsWith("svg") &&
             ((sel:String).length == 3 || (sel:String).charCodeAt(3) == '.'.code || (sel:String).charCodeAt(3) == '#'.code)
@@ -566,7 +807,52 @@ class Markup {
             addNS(data, children, sel, SVG_NS);
         }
 
-        return VNode.vnode(sel, data, children, text, null);
+        var computedXid = xid;
+        if (baseXid != null) {
+            computedXid = baseXid + xid;
+        }
+
+        return VNode.vnode(computedXid, sel, data, children, text, null);
+
+    }
+
+    static function cleanChildren(arr:Array<Any>):Array<Any> {
+
+        // First pass: check if cleaning is needed
+        var needsCleanup = false;
+        for (i in 0...arr.length) {
+            final item = arr[i];
+            if (item == null || item is Array) {
+                needsCleanup = true;
+                break;
+            }
+        }
+
+        // If no cleaning needed, return original array
+        if (!needsCleanup) {
+            return cast arr;
+        }
+
+        // Second pass: perform cleanup
+        var result = [];
+        for (i in 0...arr.length) {
+            var item = arr[i];
+            if (item == null) {
+                // Skip null items
+            }
+            else if (item is Array) {
+                item = cleanChildren(item);
+                var subArray:Array<Any> = cast item;
+                for (j in 0...subArray.length) {
+                    result.push(subArray[j]);
+                }
+            }
+            else {
+                result.push(item);
+            }
+        }
+
+        return cast result;
 
     }
 
@@ -598,5 +884,7 @@ class Markup {
         return data;
 
     }
+
+    #end
 
 }

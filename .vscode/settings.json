@@ -1,0 +1,12 @@
+{
+    "window.title": "${activeEditorShort} — Markup",
+    "search.exclude": {
+        "**/.git": true,
+        "**/node_modules": true,
+        "**/tmp": true,
+        "**/out": true
+    },
+    "haxe.configurations": [
+        ["build-html.hxml", "-D", "completion"]
+    ]
+}

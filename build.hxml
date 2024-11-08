@@ -2,3 +2,4 @@
 -cp test
 --main Main
 --interp
+extraParams.hxml

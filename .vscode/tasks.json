@@ -11,6 +11,13 @@
 		{
 			"type": "haxe",
 			"args": "active configuration",
+			"problemMatcher": [],
+			"group": "build",
+			"label": "haxe: active configuration"
+		},
+		{
+			"type": "hxml",
+			"file": "build-html.hxml",
 			"problemMatcher": [
 				"haxe-fake"
 			],
@@ -18,7 +25,7 @@
 				"kind": "build",
 				"isDefault": true
 			},
-			"label": "haxe: active configuration"
+			"label": "hxml: build-html.hxml"
 		}
 	]
 }

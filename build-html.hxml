@@ -3,5 +3,7 @@
 --main Main
 --js html/app.js
 -D markup_html
--D markup_debug
+--library tracker
+#-D markup_debug
 --debug
+extraParams.hxml
