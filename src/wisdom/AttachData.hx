@@ -1,0 +1,5 @@
+package wisdom;
+
+class AttachData {
+
+}

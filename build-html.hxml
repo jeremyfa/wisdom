@@ -2,8 +2,8 @@
 -cp test
 --main Main
 --js html/app.js
--D markup_html
+-D wisdom_html
 --library tracker
-#-D markup_debug
+#-D wisdom_debug
 --debug
 extraParams.hxml

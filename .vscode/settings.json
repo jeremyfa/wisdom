@@ -1,5 +1,5 @@
 {
-    "window.title": "${activeEditorShort} — Markup",
+    "window.title": "${activeEditorShort} — Wisdom",
     "search.exclude": {
         "**/.git": true,
         "**/node_modules": true,

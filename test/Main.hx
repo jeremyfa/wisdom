@@ -2,14 +2,14 @@ package;
 
 import js.Browser.document;
 import js.Browser.window;
-import markup.HtmlBackend;
-import markup.Markup;
-import markup.X;
-import markup.modules.AttributesModule;
-import markup.modules.ClassModule;
-import markup.modules.ListenersModule;
-import markup.modules.PropsModule;
-import markup.modules.StyleModule;
+import wisdom.HtmlBackend;
+import wisdom.Wisdom;
+import wisdom.X;
+import wisdom.modules.AttributesModule;
+import wisdom.modules.ClassModule;
+import wisdom.modules.ListenersModule;
+import wisdom.modules.PropsModule;
+import wisdom.modules.StyleModule;
 
 using StringTools;
 
@@ -53,7 +53,7 @@ class Main implements X #if tracker implements Observable #end {
 
     function new() {
 
-        final markup = new Markup([ClassModule.module(), StyleModule.module(), PropsModule.module(), AttributesModule.module(), ListenersModule.module()], new HtmlBackend());
+        final wisdom = new Wisdom([ClassModule.module(), StyleModule.module(), PropsModule.module(), AttributesModule.module(), ListenersModule.module()], new HtmlBackend());
 
         var cities = ['Paris', 'New York', 'Madrid'];
 
@@ -61,7 +61,7 @@ class Main implements X #if tracker implements Observable #end {
 
         // Example with reactivity and tracker library
 
-        markup.reactiveVDom(
+        wisdom.reactiveVDom(
             document.getElementById('container'),
             () -> '<>
 
@@ -100,7 +100,7 @@ class Main implements X #if tracker implements Observable #end {
 
         // Example without reactivity and tracker library
 
-        markup.patch(
+        wisdom.patch(
             document.getElementById('container'),
             '<>
                 <div class="align-left">

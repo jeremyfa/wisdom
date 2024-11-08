@@ -1,12 +1,12 @@
 {
-    "name": "markup",
-    "url" : "https://github.com/jeremyfa/markup/",
+    "name": "wisdom",
+    "url" : "https://github.com/jeremyfa/wisdom/",
     "license": "MIT",
-    "tags": ["virtual", "dom", "vdom", "virtualdom", "react", "snabbdom"],
+    "tags": ["virtual", "dom", "vdom", "virtualdom", "react", "snabbdom", "wisdom", "markup", "jsx"],
     "description": "A Haxe port of snabbdom, a virtual DOM library with a focus on simplicity, modularity, powerful features and performance.",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "classPath": "src/",
-    "releasenote": "Initial port of snabbdom core (not ready to use yet!)",
+    "releasenote": "Working reactive implementation with markup",
     "contributors": ["jeremyfa"],
     "dependencies": {}
   }

@@ -1,4 +1,4 @@
-# Markup
+# Wisdom
 
 A portable and modular virtual DOM library for [Haxe](https://haxe.org), with inline XML support.
 
@@ -13,7 +13,8 @@ Current focus is `JS` target in the browser to manipulate HTML DOM elements, but
 - [x] Initial port of snabbdom core
 - [x] HTML backend
 - [x] Additional modules (in progress)
-- [ ] Haxe Inline XML (JSX-like feature)
+- [x] Haxe Inline XML (JSX-like feature)
+- [ ] Some actual documentation
 
 ## Credits
 

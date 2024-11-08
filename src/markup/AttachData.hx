@@ -1,5 +1,0 @@
-package markup;
-
-class AttachData {
-
-}
