@@ -1,6 +1,6 @@
 # Wisdom
 
-A portable and modular virtual DOM library for [Haxe](https://haxe.org), with inline XML support.
+A portable and modular virtual DOM library for [Haxe](https://haxe.org), with inline markup support.
 
 Started as port of [snabbdom](https://github.com/snabbdom/snabbdom), rewritten to Haxe and extended to provide additional features.
 
@@ -15,6 +15,14 @@ Current focus is `JS` target in the browser to manipulate HTML DOM elements, but
 - [x] Additional modules (in progress)
 - [x] Haxe Inline XML (JSX-like feature)
 - [ ] Some actual documentation
+
+## Syntax highlighting
+
+Wisdom uses it's own markup syntax, surrounted with `'<>` and `'` tokens. That is, you write your markup inside a single-quoted string that starts with `<>`.
+
+By default, this markup won't be syntax highlighted in VSCode, but you can install the [haxe-wisdom VSCode extension](https://marketplace.visualstudio.com/items?itemName=jeremyfa.haxe-wisdom) to support it.
+
+![haxe wisdom markup syntax highlighting](https://github.com/jeremyfa/vscode-haxe-wisdom/blob/main/images/wisdom-syntax.png?raw=true)
 
 ## Credits
 

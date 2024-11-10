@@ -20,7 +20,7 @@ class Reactive {
     @:allow(wisdom.ReactiveComponent)
     static var currentReactiveContext:ReactiveContext = null;
 
-    public static function reactiveVDom(wisdom:Wisdom, container:Any, render:()-> #if completion Any #else VNode #end):ReactiveContext {
+    public static function reactive(wisdom:Wisdom, container:Any, render:()-> #if completion Any #else VNode #end):ReactiveContext {
 
         if (renderReactiveComponentDyn == null) {
             renderReactiveComponentDyn = renderReactiveComponent;

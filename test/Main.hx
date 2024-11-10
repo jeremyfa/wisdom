@@ -61,20 +61,27 @@ class Main implements X #if tracker implements Observable #end {
 
         // Example with reactivity and tracker library
 
-        wisdom.reactiveVDom(
+        wisdom.reactive(
             document.getElementById('container'),
             () -> '<>
 
-            <div class="align-left">
+            <div class="align-left-$name">
 
                 <!-- hello -->
 
-                <p style=${{ color: 'blue', fontWeight: 'bold' }}>All cities:</p>
+                <p style=${{ color: "blue$city", fontWeight: 'bold' }}>All cities:</p>
 
                 <foreach $cities ${(i:Int, city:String) -> '<>
                     <key ${city.toLowerCase().replace(' ','-')} />
 
-                    <HelloAndCount name="$name in ${city.toLowerCase()}" />
+                    <if ${name == 'Bob 12'}>
+                        <HelloAndCount name="A1 $name in A1" />
+                        <p>Another tag</p>
+                    <elseif ${name == 'Bob 15'}>
+                        <HelloAndCount name="B $name in B" />
+                    <else>
+                        <HelloAndCount name="C $name in ${city.toLowerCase()}" />
+                    </if>
 
                     <p key=${name+'-'+city}
                     style=${{ color: "green" }} class="city-info">
