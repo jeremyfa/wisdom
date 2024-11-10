@@ -422,7 +422,7 @@ class MarkupToVDom {
                 else if (forToIterate != null && forItem != null && (c.charCodeAt(0) == '/'.code && input.charCodeAt(i+1) == '>'.code)) {
                     i += 2;
 
-					var tagOutput = output;
+                    var tagOutput = output;
                     output = prevOutput;
                     output.add(tagOutput.toString());
 
@@ -450,7 +450,7 @@ class MarkupToVDom {
                 else if (keyExpr != null && (c.charCodeAt(0) == '/'.code && input.charCodeAt(i+1) == '>'.code)) {
                     i += 2;
 
-					var tagOutput = output;
+                    var tagOutput = output;
                     output = prevOutput;
                     output.add(tagOutput.toString());
 
@@ -482,7 +482,7 @@ class MarkupToVDom {
                         output.add(' [');
                     }
 
-					var tagOutput = output;
+                    var tagOutput = output;
                     output = prevOutput;
                     output.add(tagOutput.toString());
 
