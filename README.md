@@ -45,7 +45,7 @@ Custom components start with an uppercase letter:
 ```xml
 <UserProfile user=$currentUser />
 
-<Button type="primary" onClick=$handleClick>
+<Button type="primary" onclick=$handleClick>
     Click me
 </Button>
 ```
