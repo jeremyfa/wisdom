@@ -382,6 +382,8 @@ wisdom.reactive(
 );
 ```
 
+When using `wisdom.reactive()`, the virtual dom will be patched automatically any time an observable value that it depends on changes.
+
 ### Components with reactive state
 
 You might have noticed we are invoking another component named `HelloAndCount`. Here is how it looks like:
@@ -409,9 +411,9 @@ You might have noticed we are invoking another component named `HelloAndCount`. 
 }
 ```
 
-This time, the component provides its own state: any argument prefixed with the `@state` meta will be part of its state. If any of those values are changing, the component will be rendered again and the virtual dom automatically **patched** in reaction.
+This time, the component provides its own state: any argument prefixed with the `@state` meta will become an observable variable of the component's state. If any of those values are changing, the component will be rendered again and the virtual dom automatically **patched** in reaction.
 
-In this example, clicking on the element will trigger an increment of the `count` variable an make the component render itself again, if used within a `wisdom.reactive()` root.
+In this example, clicking on the element will trigger an increment of the `count` variable an make the component render itself again, because it is used within a `wisdom.reactive()` call.
 
 ## Limitations
 
