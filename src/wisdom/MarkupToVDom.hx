@@ -1,7 +1,5 @@
 package wisdom;
 
-import haxe.Json;
-
 using StringTools;
 
 class MarkupToVDomError {
@@ -74,11 +72,15 @@ class MarkupToVDom {
 
     static final RE_ATTR_START = ~/^([a-zA-Z_])/;
 
+    static final RE_NUMBER_BOOL_NULL_START = ~/^([\.0-9tfn])/;
+
     static final RE_IDENTIFIER = ~/^([a-zA-Z_][a-zA-Z_0-9]*)/;
 
-    static final RE_NUMBER = ~/^([0-9]+)$/;
+    static final RE_INTEGER = ~/^([0-9]+)$/;
 
     static final RE_ATTR = ~/^([a-zA-Z_][a-zA-Z_0-9\-]*)(?:\s*( |=)\s*("|\$))?/;
+
+    static final RE_ANY_NUMBER = ~/^(0x[0-9a-fA-F]+|(?:(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][+-]?[0-9]+)?))/;
 
     var i:Int = 0;
 
@@ -104,9 +106,13 @@ class MarkupToVDom {
 
     var parent:MarkupToVDom = null;
 
-    var afterElseOrElseIf:Bool = false;
+    var afterInnerControl:Bool = false;
 
     var ifHasElse:Bool = false;
+
+    var switchHasCases:Bool = false;
+
+    var switchHasDefaultCase:Bool = false;
 
     public var componentTagPos(default, null):Array<Int> = null;
 
@@ -126,7 +132,7 @@ class MarkupToVDom {
         this.currentPath = currentPath ?? [];
         this.numIter = numIter;
         this.parent = parent;
-        this.afterElseOrElseIf = false;
+        this.afterInnerControl = false;
 
         parse();
 
@@ -154,12 +160,12 @@ class MarkupToVDom {
                             i += 3;
                         }
                         else {
-                            throw new MarkupToVDomError(commentI + iOffset, "Unterminated comment (parse)");
+                            fail(commentI + iOffset, "Unterminated comment (parse)");
                         }
 
                     }
                     else {
-                        throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parse)");
+                        fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parse)");
                     }
                 }
                 else if (c1 != '/'.code) {
@@ -171,12 +177,20 @@ class MarkupToVDom {
                         i = markup2vdom.i;
                         numIter = markup2vdom.numIter;
                         iOffset = markup2vdom.iOffset;
-                        if (tagStack.length > 0 && tagStack[tagStack.length-1] == 'if') {
-                            if (content.trim().length > 0) {
-                                output.addChar('['.code);
-                                output.add(content);
-                                output.addChar(']'.code);
-                            }
+                        final lastTag = tagStack.length > 0 ? tagStack[tagStack.length-1] : null;
+                        if (lastTag == 'if') {
+                            output.addChar('['.code);
+                            output.add(content);
+                            output.addChar(']'.code);
+                        }
+                        else if (lastTag == 'case' || lastTag == 'default') {
+                            output.addChar('['.code);
+                            output.add(content);
+                            output.addChar(']'.code);
+                            output.addChar(';'.code);
+                        }
+                        else if (lastTag == 'switch') {
+                            output.add(content);
                         }
                         else {
                             if (content.trim().length > 0) {
@@ -209,7 +223,7 @@ class MarkupToVDom {
                     return;
                 }
                 if (i == prevI) {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parse)");
+                    fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parse)");
                 }
             }
 
@@ -241,7 +255,7 @@ class MarkupToVDom {
                     return false;
                 }
                 else if (c == "'".code) {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseText)");
+                    fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseText)");
                 }
                 else if (c == "$".code) {
                     i++;
@@ -255,6 +269,21 @@ class MarkupToVDom {
                         text.add(parseDollarValue());
                         add("+".code);
                         add("'".code);
+                    }
+                }
+                else if (c == '/'.code && input.charCodeAt(i+1) == '*'.code) {
+                    i += 2;
+                    while (i < input.length - 1 && (input.charCodeAt(i) != '*'.code || input.charCodeAt(i+1) != '/'.code)) {
+                        i++;
+                    }
+                    if (i < input.length - 1 && input.charCodeAt(i) == '*'.code && input.charCodeAt(i+1) == '/'.code) {
+                        i++;
+                    }
+                }
+                else if (c == '/'.code && input.charCodeAt(i+1) == '/'.code) {
+                    i += 2;
+                    while (i < input.length && input.charCodeAt(i) != '\n'.code) {
+                        i++;
                     }
                 }
                 else if (c == '<'.code) {
@@ -294,7 +323,7 @@ class MarkupToVDom {
                     }
                 }
                 else if (c == '>'.code) {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseText)");
+                    fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseText)");
                 }
                 else {
                     add(c);
@@ -314,7 +343,7 @@ class MarkupToVDom {
     function parseTagOpen():Bool {
 
         if (!RE_TAG_OPEN.match(input.substr(i))) {
-            throw new MarkupToVDomError(i + iOffset, "Unexpected '<' (parseTagOpen)");
+            fail(i + iOffset, "Unexpected '<' (parseTagOpen)");
         }
 
         final tag = RE_TAG_OPEN.matched(1);
@@ -332,19 +361,31 @@ class MarkupToVDom {
         var isElse = (tag == 'else');
         var ifExpr = null;
 
-        if (!isElseIf && !isElse) {
-            if (afterElseOrElseIf) {
-                afterElseOrElseIf = false;
+        var isSwitch = (tag == 'switch');
+        var switchExpr = null;
+
+        var isCase = (tag == 'case' || tag == 'default');
+        var isDefaultCase = (tag == 'default');
+        var caseExpr = null;
+
+        if (!isElseIf && !isElse && !isCase) {
+            if (afterInnerControl) {
+                afterInnerControl = false;
             }
             else {
                 if (nodes.length > 0) {
                     output.add(", ");
                 }
-                nodes.push(tag);
+				nodes.push(tag);
             }
         }
 
-        afterElseOrElseIf = (isElseIf || isElse);
+        afterInnerControl = (isElseIf || isElse || isCase);
+
+        var lastParentNode = (parent != null && parent.nodes.length > 0) ? parent.nodes[parent.nodes.length-1] : null;
+        if (lastParentNode == 'switch' && !isCase) {
+            fail(i + iOffset, "Unexpected <" + tag + "> tag (parseTagOpen)");
+        }
 
         var prevOutput = output;
         output = new StringBuf();
@@ -359,7 +400,7 @@ class MarkupToVDom {
         else if (isElseIf) {
             var lastTag = parent != null && parent.tagStack.length > 0 ? parent.tagStack[parent.tagStack.length-1] : null;
             if (lastTag != 'if' && lastTag != 'elseif') {
-                throw new MarkupToVDomError(i + iOffset, "Unexpected <" + tag + "> tag (parseTagOpen)");
+                fail(i + iOffset, "Unexpected <" + tag + "> tag (parseTagOpen)");
             }
             output.add("] else if ");
         }
@@ -367,9 +408,29 @@ class MarkupToVDom {
             parent.ifHasElse = true;
             var lastTag = parent != null && parent.tagStack.length > 0 ? parent.tagStack[parent.tagStack.length-1] : null;
             if (lastTag != 'if' && lastTag != 'elseif') {
-                throw new MarkupToVDomError(i + iOffset, "Unexpected <" + tag + "> tag (parseTagOpen)");
+                fail(i + iOffset, "Unexpected <" + tag + "> tag (parseTagOpen)");
             }
             output.add("] else ");
+        }
+        else if (isSwitch) {
+            switchHasCases = false;
+            switchHasDefaultCase = false;
+            output.add("switch ");
+        }
+        else if (isCase) {
+            var lastTag = parent != null && parent.tagStack.length > 0 ? parent.tagStack[parent.tagStack.length-1] : null;
+            if (lastTag != 'switch') {
+                fail(i + iOffset, "Unexpected <" + tag + "> tag (parseTagOpen)");
+            }
+            parent.switchHasCases = true;
+            if (isDefaultCase) {
+                parent.switchHasDefaultCase = true;
+                caseExpr = "default";
+                output.add(" ");
+            }
+            else {
+                output.add(" case ");
+            }
         }
 
         tagStack.push(tag);
@@ -378,13 +439,72 @@ class MarkupToVDom {
         i += RE_TAG_OPEN.matched(0).length;
 
         var attrKeys:Array<String> = null;
-        var attrValues:Array<Any> = null;
+        var attrValues:Array<String> = null;
 
         while (i < input.length) {
 
             var c = input.charAt(i);
 
-            if (isFor) {
+            if (c == '/' && input.charCodeAt(i+1) == '*'.code) {
+                i += 2;
+                while (i < input.length - 1 && (input.charCodeAt(i) != '*'.code || input.charCodeAt(i+1) != '/'.code)) {
+                    i++;
+                }
+                if (i < input.length - 1 && input.charCodeAt(i) == '*'.code && input.charCodeAt(i+1) == '/'.code) {
+                    i += 2;
+                }
+            }
+            else if (c == '/' && input.charCodeAt(i+1) == '/'.code) {
+                i += 2;
+                while (i < input.length && input.charCodeAt(i) != '\n'.code) {
+                    i++;
+                }
+            }
+            else if (c == '/' && input.charCodeAt(i+1) == '*'.code) {
+                i += 2;
+                while (i < input.length - 1 && input.charCodeAt(i) != '*'.code && input.charCodeAt(i+1) != '/'.code) {
+                    i++;
+                }
+                if (i < input.length - 1 && input.charCodeAt(i) != '*'.code && input.charCodeAt(i+1) != '/'.code) {
+                    i += 2;
+                }
+            }
+            else if (RE_ATTR_START.match(c) && RE_ATTR.match(input.substr(i)) && RE_ATTR.matched(1) != 'true' && RE_ATTR.matched(1) != 'false' && RE_ATTR.matched(1) != 'null' && RE_ATTR.matched(1) != '_') {
+
+                final attr = RE_ATTR.matched(1);
+
+                if (attrKeys == null) {
+                    attrKeys = [];
+                    attrValues = [];
+                }
+
+                final isControlAttr = (attr == 'if' || attr == 'unless');
+
+                if (!isControlAttr && attrKeys.contains(attr)) {
+                    fail(i + iOffset, "Duplicate attribute: '" + attr + "'");
+                }
+
+                if (RE_ATTR.matched(2) == null || RE_ATTR.matched(2).trim() == '') {
+                    fail(i + iOffset, "Invalid attribute '" + attr + "'");
+                }
+
+                attrKeys.push(attr);
+
+                i += RE_ATTR.matched(0).length;
+
+                var assignStart = RE_ATTR.matched(3);
+                if (assignStart == '"') {
+                    i--;
+                    attrValues.push(parseAttrStrValue());
+                }
+                else if (assignStart == "$") {
+                    attrValues.push(parseDollarValue());
+                }
+                else {
+                    attrValues.push(attr);
+                }
+            }
+            else if (isFor) {
 
                 if (c.isSpace(0)) {
                     i++;
@@ -416,7 +536,7 @@ class MarkupToVDom {
                         output.add(")(wisdom_.Wisdom.iIter(), iter_)]; wisdom_.Wisdom.iPop(); foreach_; }");
                     }
                     else {
-                        throw new MarkupToVDomError(i + iOffset, "Unexpected '" + c + "' in <foreach ... /> (parseTagOpen)");
+                        fail(i + iOffset, "Unexpected '" + c + "' in <foreach ... /> (parseTagOpen)");
                     }
                 }
                 else if (forToIterate != null && forItem != null && (c.charCodeAt(0) == '/'.code && input.charCodeAt(i+1) == '>'.code)) {
@@ -424,12 +544,22 @@ class MarkupToVDom {
 
                     var tagOutput = output;
                     output = prevOutput;
+
+                    if (attrKeys != null) {
+                        processIfConditions(
+                            extractControlConditions(attrKeys, attrValues, tag)
+                        );
+                    }
+
+                    tagStack.pop();
+                    processTernaryCloses(tagOutput);
+
                     output.add(tagOutput.toString());
 
                     return true;
                 }
                 else {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + c + "' in <foreach ... /> (parseTagOpen)");
+                    fail(i + iOffset, "Unexpected '" + c + "' in <foreach ... /> (parseTagOpen)");
                 }
             }
             else if (isKey) {
@@ -444,7 +574,7 @@ class MarkupToVDom {
                         output.add('{wisdom_.Wisdom.iKey(' + keyExpr + '); null;}');
                     }
                     else {
-                        throw new MarkupToVDomError(i + iOffset, "Unexpected '" + c + "' in <key ... /> (parseTagOpen)");
+                        fail(i + iOffset, "Unexpected '" + c + "' in <key ... /> (parseTagOpen)");
                     }
                 }
                 else if (keyExpr != null && (c.charCodeAt(0) == '/'.code && input.charCodeAt(i+1) == '>'.code)) {
@@ -452,12 +582,22 @@ class MarkupToVDom {
 
                     var tagOutput = output;
                     output = prevOutput;
+
+                    if (attrKeys != null) {
+                        processIfConditions(
+                            extractControlConditions(attrKeys, attrValues, tag)
+                        );
+                    }
+
+                    tagStack.pop();
+                    processTernaryCloses(tagOutput);
+
                     output.add(tagOutput.toString());
 
                     return true;
                 }
                 else {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + c + "' in <foreach ... /> (parseTagOpen)");
+                    fail(i + iOffset, "Unexpected '" + c + "' in <foreach ... /> (parseTagOpen)");
                 }
             }
             else if (isIf || isElseIf || isElse) {
@@ -472,7 +612,7 @@ class MarkupToVDom {
                         output.add('(' + ifExpr + ')');
                     }
                     else {
-                        throw new MarkupToVDomError(i + iOffset, "Unexpected '" + c + "' in <" + tag + " ... /> (parseTagOpen)");
+                        fail(i + iOffset, "Unexpected '" + c + "' in <" + tag + " ... /> (parseTagOpen)");
                     }
                 }
                 else if ((isElse || ifExpr != null) && c.charCodeAt(0) == '>'.code) {
@@ -489,54 +629,91 @@ class MarkupToVDom {
                     return isElseIf || isElse;
                 }
                 else {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + c + "' in <" + tag + " ... /> (parseTagOpen)");
+                    fail(i + iOffset, "Unexpected '" + c + "' in <" + tag + " ... /> (parseTagOpen)");
                 }
 
             }
-            else if (RE_ATTR_START.match(c)) {
-                if (!RE_ATTR.match(input.substr(i))) {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + c + "' (parseTagOpen)");
+            else if (isSwitch || isCase) {
+
+                if (c.isSpace(0)) {
+                    i++;
                 }
-
-                final attr = RE_ATTR.matched(1);
-
-                if (attrKeys == null) {
-                    attrKeys = [];
-                    attrValues = [];
+                else if (c == "$") {
+                    if (isSwitch && switchExpr == null) {
+                        i++;
+                        switchExpr = parseDollarValue();
+                        output.add('(' + switchExpr + ') {');
+                    }
+                    else if (isCase && caseExpr == null) {
+                        i++;
+                        caseExpr = parseDollarValue();
+                    }
+                    else {
+                        fail(i + iOffset, "Unexpected '" + c + "' in <" + tag + " ... /> (parseTagOpen)");
+                    }
                 }
-
-                final isControlAttr = (attr == 'if' || attr == 'unless');
-
-                if (!isControlAttr && attrKeys.contains(attr)) {
-                    throw new MarkupToVDomError(i + iOffset, "Duplicate attribute: '" + attr + "'");
+                else if (isCase && caseExpr == null && c == '"') {
+                    // String expr
+                    caseExpr = parseAttrStrValue();
                 }
-
-                // if (isControlAttr && RE_ATTR.matched(2) == '=') {
-                //     throw new MarkupToVDomError(i + iOffset + attr.length, "Unexpected '='");
-                // }
-                // else if (!isControlAttr && RE_ATTR.matched(2) == ' ') {
-                //     throw new MarkupToVDomError(i + iOffset + attr.length, "Unexpected ' '");
-                // }
-
-                if (RE_ATTR.matched(2).trim() == '') {
-                    throw new MarkupToVDomError(i + iOffset + attr.length, "Unexpected ' '");
+                else if (isCase && caseExpr == null && c == '_') {
+                    // Default case
+                    i++;
+                    caseExpr = '_';
+                    parent.switchHasDefaultCase = true;
                 }
-
-                attrKeys.push(attr);
-
-                i += RE_ATTR.matched(0).length;
-
-                var assignStart = RE_ATTR.matched(3);
-                if (assignStart == '"') {
-                    i--;
-                    attrValues.push(parseAttrStrValue());
+                else if (isCase && caseExpr == null && RE_NUMBER_BOOL_NULL_START.match(c)) {
+                    // Number, bool or null expr
+                    switch RE_NUMBER_BOOL_NULL_START.matched(0) {
+                        case 't':
+                            if (input.substr(i, 4) == 'true') {
+                                i += 4;
+                                caseExpr = 'true';
+                            }
+                        case 'f':
+                            if (input.substr(i, 5) == 'false') {
+                                i += 5;
+                                caseExpr = 'false';
+                            }
+                        case 'n':
+                            if (input.substr(i, 4) == 'null') {
+                                i += 4;
+                                caseExpr = 'null';
+                            }
+                        case _:
+                            if (RE_ANY_NUMBER.match(input.substr(i))) {
+                                caseExpr = RE_ANY_NUMBER.matched(0);
+                                i += caseExpr.length;
+                            }
+                    }
+                    if (caseExpr == null) {
+                        fail(i + iOffset, "Unexpected '" + c + "' in <" + tag + " ... /> (parseTagOpen)");
+                    }
                 }
-                else if (assignStart == "$") {
-                    attrValues.push(parseDollarValue());
+                else if ((switchExpr != null || caseExpr != null) && c.charCodeAt(0) == '>'.code) {
+                    i++;
+
+                    if (caseExpr != null) {
+                        output.add(caseExpr);
+                        if (attrKeys != null) {
+                            var ifConditions = extractControlConditions(attrKeys, attrValues, tag);
+                            if (ifConditions != null) {
+                                output.add(' if ((' + ifConditions.join(') && (') + '))');
+                            }
+                        }
+                        output.addChar(':'.code);
+                    }
+
+                    var tagOutput = output;
+                    output = prevOutput;
+                    output.add(tagOutput.toString());
+
+                    return false;
                 }
                 else {
-                    attrValues.push(attr);
+                    fail(i + iOffset, "Unexpected '" + c + "' in <" + tag + " ... /> (parseTagOpen)");
                 }
+
             }
             else if ((c.charCodeAt(0) == '/'.code && input.charCodeAt(i+1) == '>'.code) || c.charCodeAt(0) == '>'.code) {
 
@@ -567,7 +744,6 @@ class MarkupToVDom {
                 // End of tag open
                 i++;
                 var ifConditions = null;
-                var unlessConditions = null;
                 if (attrKeys != null && attrKeys.length > 0) {
                     output.add(', wisdom_.Wisdom.v({ ');
                     var propsOutput:StringBuf = null;
@@ -597,13 +773,13 @@ class MarkupToVDom {
                             ifConditions.push(value);
                         }
                         else if (key == 'unless') {
-                            if (unlessConditions == null) unlessConditions = [];
-                            unlessConditions.push(value);
+                            if (ifConditions == null) ifConditions = [];
+                            ifConditions.push('!(' + value + ')');
                         }
                         else if (key.startsWith('on')) {
                             final eventKey = key.substr(2);
                             if (isOnTopLevel) {
-                                throw new MarkupToVDomError(-1, 'Cannot have both top level "on" attribute and separate "on*" attributes');
+                                fail(-1, 'Cannot have both top level "on" attribute and separate "on*" attributes');
                             }
                             if (onOutput == null) {
                                 onOutput = new StringBuf();
@@ -628,7 +804,7 @@ class MarkupToVDom {
                         }
                         else {
                             if (isPropsTopLevel) {
-                                throw new MarkupToVDomError(-1, 'Cannot have both top level "props" attribute and separate attributes');
+                                fail(-1, 'Cannot have both top level "props" attribute and separate attributes');
                             }
                             if (propsOutput == null) {
                                 propsOutput = new StringBuf();
@@ -680,52 +856,18 @@ class MarkupToVDom {
                     }
                     output.add('})');
                 }
-                var autoClosing = c.charCodeAt(0) == '/'.code;
-                if (autoClosing) {
-                    tagStack.pop();
-                    i++;
-                    output.addChar(')'.code);
-                    final numTernaryClose = tagTernaryStack.pop();
-                    for (_ in 0...numTernaryClose) {
-                        output.addChar(' '.code);
-                        output.addChar(':'.code);
-                        output.addChar(' '.code);
-                        output.addChar('n'.code);
-                        output.addChar('u'.code);
-                        output.addChar('l'.code);
-                        output.addChar('l'.code);
-                        output.addChar(')'.code);
-                    }
-                }
 
                 var tagOutput = output;
                 output = prevOutput;
 
-                if (ifConditions != null) {
-                    for (cond in ifConditions) {
-                        tagTernaryStack[tagTernaryStack.length - 1] = tagTernaryStack[tagTernaryStack.length - 1] + 1;
-                        output.addChar('('.code);
-                        output.addChar('('.code);
-                        output.add(cond);
-                        output.addChar(')'.code);
-                        output.addChar(' '.code);
-                        output.addChar('?'.code);
-                        output.addChar(' '.code);
-                    }
-                }
+                processIfConditions(ifConditions);
 
-                if (unlessConditions != null) {
-                    for (cond in unlessConditions) {
-                        tagTernaryStack[tagTernaryStack.length - 1] = tagTernaryStack[tagTernaryStack.length - 1] + 1;
-                        output.addChar('('.code);
-                        output.addChar('!'.code);
-                        output.addChar('('.code);
-                        output.add(cond);
-                        output.addChar(')'.code);
-                        output.addChar(' '.code);
-                        output.addChar('?'.code);
-                        output.addChar(' '.code);
-                    }
+                var autoClosing = c.charCodeAt(0) == '/'.code;
+                if (autoClosing) {
+                    tagStack.pop();
+                    i++;
+                    tagOutput.addChar(')'.code);
+                    processTernaryCloses(tagOutput);
                 }
 
                 output.add(tagOutput.toString());
@@ -740,13 +882,70 @@ class MarkupToVDom {
                 i++;
             }
             else {
-                throw new MarkupToVDomError(i + iOffset, "Unexpected '" + c + "' (parseTagOpen)");
+                fail(i + iOffset, "Unexpected '" + c + "' (parseTagOpen)");
             }
 
         }
 
-        throw new MarkupToVDomError(-1, "Unexpected end of tag open");
+        fail(-1, "Unexpected end of tag open");
         return false;
+
+    }
+
+    function extractControlConditions(attrKeys:Array<String>, attrValues:Array<String>, tag:String):Array<String> {
+
+        var ifConditions = null;
+
+        for (n in 0...attrKeys.length) {
+            final attr = attrKeys[n];
+
+            if (attr == 'if' || attr == 'unless') {
+                if (ifConditions == null) ifConditions = [];
+                ifConditions.push(attrValues[n]);
+            }
+            else if (attr == 'unless') {
+                if (ifConditions == null) ifConditions = [];
+                ifConditions.push('!(' + attrValues[n] + ')');
+            }
+            else {
+                fail(i + iOffset, "Unexpected attribute '" + attr + "' in <" + tag + " ... /> (parseTagOpen)");
+            }
+        }
+
+        return ifConditions;
+
+    }
+
+    function processIfConditions(ifConditions:Array<String>) {
+
+        if (ifConditions != null) {
+            for (cond in ifConditions) {
+                tagTernaryStack[tagTernaryStack.length - 1] = tagTernaryStack[tagTernaryStack.length - 1] + 1;
+                output.addChar('('.code);
+                output.addChar('('.code);
+                output.add(cond);
+                output.addChar(')'.code);
+                output.addChar(' '.code);
+                output.addChar('?'.code);
+                output.addChar(' '.code);
+            }
+        }
+
+    }
+
+    function processTernaryCloses(output:StringBuf) {
+
+        final numTernaryClose = tagTernaryStack.pop();
+        for (_ in 0...numTernaryClose) {
+            output.addChar(' '.code);
+            output.addChar(':'.code);
+            output.addChar(' '.code);
+            output.addChar('n'.code);
+            output.addChar('u'.code);
+            output.addChar('l'.code);
+            output.addChar('l'.code);
+            output.addChar(')'.code);
+        }
 
     }
 
@@ -756,7 +955,7 @@ class MarkupToVDom {
         result.addChar('"'.code);
 
         for (item in currentPath) {
-            if (RE_NUMBER.match(item)) {
+            if (RE_INTEGER.match(item)) {
                 result.addChar('/'.code);
                 result.add(item);
             }
@@ -784,28 +983,28 @@ class MarkupToVDom {
     function parseTagClose() {
 
         if (!RE_TAG_CLOSE.match(input.substr(i))) {
-            throw new MarkupToVDomError(i + iOffset, "Unexpected '<' (parseTagClose)");
+            fail(i + iOffset, "Unexpected '<' (parseTagClose)");
         }
 
         final tag = RE_TAG_CLOSE.matched(1);
         final isComponent = tag.charAt(0).toLowerCase() != tag.charAt(0);
 
         if (tagStack.length == 0) {
-            throw new MarkupToVDomError(i + iOffset, "Unexpected closing tag '</" + tag + ">' (parseTagClose)");
+            fail(i + iOffset, "Unexpected closing tag '</" + tag + ">' (parseTagClose)");
         }
         else {
             final opened = tagStack.pop();
             if (tag == 'if') {
                 if (opened != 'else' && opened != 'elseif' && opened != 'if') {
-                    throw new MarkupToVDomError(i + iOffset, "Closing tag '</" + tag + ">' should be '</" + opened + ">' (parseTagClose)");
+                    fail(i + iOffset, "Closing tag '</" + tag + ">' should be '</" + opened + ">' (parseTagClose)");
                 }
             }
             else if (opened != tag) {
                 if (opened == 'else' || opened == 'elseif' || opened == 'if') {
-                    throw new MarkupToVDomError(i + iOffset, "Closing tag '</" + tag + ">' should be '</if>' (parseTagClose)");
+                    fail(i + iOffset, "Closing tag '</" + tag + ">' should be '</if>' (parseTagClose)");
                 }
                 else {
-                    throw new MarkupToVDomError(i + iOffset, "Closing tag '</" + tag + ">' should be '</" + opened + ">' (parseTagClose)");
+                    fail(i + iOffset, "Closing tag '</" + tag + ">' should be '</" + opened + ">' (parseTagClose)");
                 }
             }
         }
@@ -815,20 +1014,19 @@ class MarkupToVDom {
                 output.add(' else []');
             }
         }
+        else if (tag == 'switch') {
+            if (!switchHasDefaultCase) {
+                output.add(' case _: [];');
+            }
+            output.addChar('}'.code);
+        }
+        else if (tag == 'case' || tag == 'default') {
+            // Nothing to add
+        }
         else {
             output.addChar(')'.code);
         }
-        final numTernaryClose = tagTernaryStack.pop();
-        for (_ in 0...numTernaryClose) {
-            output.addChar(' '.code);
-            output.addChar(':'.code);
-            output.addChar(' '.code);
-            output.addChar('n'.code);
-            output.addChar('u'.code);
-            output.addChar('l'.code);
-            output.addChar('l'.code);
-            output.addChar(')'.code);
-        }
+        processTernaryCloses(output);
         if (isComponent) {
             componentTagPos.push(i + 1);
         }
@@ -895,7 +1093,7 @@ class MarkupToVDom {
         }
         else {
             if (!RE_IDENTIFIER.match(input.substr(i))) {
-                throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseDollarValue)");
+                fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseDollarValue)");
             }
             final value = RE_IDENTIFIER.matched(0);
             i += value.length;
@@ -1040,11 +1238,11 @@ class MarkupToVDom {
                         i += 1 + value.length;
                     }
                     else {
-                        throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseDoubleQuotedString)");
+                        fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseDoubleQuotedString)");
                     }
                 }
                 else {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseDoubleQuotedString)");
+                    fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseDoubleQuotedString)");
                 }
             }
             else if (c == '"'.code) {
@@ -1107,11 +1305,11 @@ class MarkupToVDom {
                         i += 1 + value.length;
                     }
                     else {
-                        throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseSingleQuotedString)");
+                        fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseSingleQuotedString)");
                     }
                 }
                 else {
-                    throw new MarkupToVDomError(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseSingleQuotedString)");
+                    fail(i + iOffset, "Unexpected '" + String.fromCharCode(c) + "' (parseSingleQuotedString)");
                 }
             }
             else if (c == '\''.code) {
@@ -1125,6 +1323,12 @@ class MarkupToVDom {
                 i++;
             }
         }
+
+    }
+
+    inline function fail(pos:Int, message:String) {
+
+        throw new MarkupToVDomError(pos, message);
 
     }
 

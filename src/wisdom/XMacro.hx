@@ -25,18 +25,18 @@ class XMacro {
             switch field.kind {
                 case FVar(t, e):
                     if (e != null)
-                        field.kind = FVar(t, processInlineWisdom(e));
+                        field.kind = FVar(t, processInlineMarkup(e));
 
                 case FProp(get, set, t, e):
                     if (e != null)
-                        field.kind = FProp(get, set, t, processInlineWisdom(e));
+                        field.kind = FProp(get, set, t, processInlineMarkup(e));
 
                 case FFun(f):
                     var stateFields:Map<String,FunctionArg> = null;
                     if (hasXMeta(field)) {
                         stateFields = transformWisdomComponent(field);
                     }
-                    f.expr = processInlineWisdom(f.expr);
+                    f.expr = processInlineMarkup(f.expr);
 
                     #if !completion
                     if (stateFields != null) {
@@ -213,9 +213,13 @@ class XMacro {
 
     }
 
-    static function processStateFields(e:Expr, stateFields:Map<String,FunctionArg>, observe:Bool = true):Expr {
+    static function processStateFields(e:Expr, stateFields:Map<String,FunctionArg>, observe:Bool = true, ?consumed:Map<Expr,Bool>):Expr {
 
         // TODO stop on shadowed state variables
+
+        if (consumed == null) consumed = new Map();
+        if (consumed.exists(e)) return e;
+        consumed.set(e, true);
 
         switch e.expr {
             case EConst(CIdent(s)) if (stateFields.exists(s)):
@@ -246,7 +250,7 @@ class XMacro {
                         switch e1.expr {
                             case EConst(CIdent(s)) if (stateFields.exists(s)):
                                 final expr = {
-                                    expr: EBinop(op, processStateFields(e1, stateFields), processStateFields(e2, stateFields)),
+                                    expr: EBinop(op, processStateFields(e1, stateFields, true, consumed), processStateFields(e2, stateFields, true, consumed)),
                                     pos: e.pos
                                 };
                                 return macro state_.set($v{s}, $expr);
@@ -257,7 +261,7 @@ class XMacro {
                     case OpAssign:
                         switch e1.expr {
                             case EConst(CIdent(s)) if (stateFields.exists(s)):
-                                final expr = processStateFields(e2, stateFields);
+                                final expr = processStateFields(e2, stateFields, true, consumed);
                                 return macro state_.set($v{s}, $expr);
 
                             case _:
@@ -273,35 +277,35 @@ class XMacro {
 
                             case [OpIncrement, true]:
                                 final expr = {
-                                    expr: EBinop(OpAdd, processStateFields(e1, stateFields, false), macro 1),
+                                    expr: EBinop(OpAdd, processStateFields(e1, stateFields, false, consumed), macro 1),
                                     pos: e.pos
                                 };
                                 return macro state_.getUnobservedAndSet($v{s}, $expr);
 
                             case [OpDecrement, true]:
                                 final expr = {
-                                    expr: EBinop(OpSub, processStateFields(e1, stateFields, false), macro 1),
+                                    expr: EBinop(OpSub, processStateFields(e1, stateFields, false, consumed), macro 1),
                                     pos: e.pos
                                 };
                                 return macro state_.getUnobservedAndSet($v{s}, $expr);
 
                             case [OpIncrement, false]:
                                 final expr = {
-                                    expr: EBinop(OpAdd, processStateFields(e1, stateFields, false), macro 1),
+                                    expr: EBinop(OpAdd, processStateFields(e1, stateFields, false, consumed), macro 1),
                                     pos: e.pos
                                 };
                                 return macro state_.set($v{s}, $expr);
 
                             case [OpDecrement, false]:
                                 final expr = {
-                                    expr: EBinop(OpSub, processStateFields(e1, stateFields, false), macro 1),
+                                    expr: EBinop(OpSub, processStateFields(e1, stateFields, false, consumed), macro 1),
                                     pos: e.pos
                                 };
                                 return macro state_.set($v{s}, $expr);
 
                             case [_, _]:
                                 final expr = {
-                                    expr: EUnop(op, postFix, processStateFields(e1, stateFields)),
+                                    expr: EUnop(op, postFix, processStateFields(e1, stateFields, true, consumed)),
                                     pos: e.pos
                                 };
                                 return macro state_.set($v{s}, $expr);
@@ -315,32 +319,36 @@ class XMacro {
 
         return ExprTools.map(e, e -> {
             try {
-                return processStateFields(e, stateFields);
+                return processStateFields(e, stateFields, true, consumed);
             }
             catch (err:Any) {
-
-                // Not really sure why this can happen,
-                // but this workaround seems to be enough?
-                if (Std.string(err) != 'Stack overflow') throw err;
-
-                return e;
+                // Why is this happening when using haxe completion server?
+                trace('Exception of type: ' + Type.getClass(err));
+                if (Std.string(err) != 'Stack overflow') {
+                    throw err;
+                }
             }
+            return e;
         });
 
     }
 
-    static function processInlineWisdom(e:Expr):Expr {
+    static function processInlineMarkup(e:Expr, ?consumed:Map<Expr,Bool>):Expr {
+
+        if (consumed == null) consumed = new Map();
+        if (consumed.exists(e)) return e;
+        consumed.set(e, true);
 
         switch e.expr {
             case EMeta(s, expr) if (s.name == ':wisdom'):
                 switch expr.expr {
                     case EConst(CString(s, kind)):
-                        final expr = processWisdomString(s, kind, e.pos);
+                        final expr = processMarkupString(s, kind, e.pos);
                         return macro $expr;
                     case _:
                 }
             case EConst(CString(s, kind)) if (s.startsWith("<>") && kind == SingleQuotes):
-                final expr = processWisdomString(s, kind, e.pos);
+                final expr = processMarkupString(s, kind, e.pos);
                 return macro $expr;
             case EDisplay(expr, displayKind):
                 return e;
@@ -349,21 +357,21 @@ class XMacro {
 
         return ExprTools.map(e, e -> {
             try {
-                return processInlineWisdom(e);
+                return processInlineMarkup(e, consumed);
             }
             catch (err:Any) {
-
-                // Not really sure why this can happen,
-                // but this workaround seems to be enough?
-                if (Std.string(err) != 'Stack overflow') throw err;
-
-                return e;
+                // Why is this happening when using haxe completion server?
+                trace('Exception of type: ' + Type.getClass(err));
+                if (Std.string(err) != 'Stack overflow') {
+                    throw err;
+                }
             }
+            return e;
         });
 
     }
 
-    static function processWisdomString(s:String, kind:StringLiteralKind, pos:Position):Expr {
+    static function processMarkupString(s:String, kind:StringLiteralKind, pos:Position):Expr {
         if (!macroHasErrors) {
             final markup2vdom = new MarkupToVDom();
             final offset = s.startsWith("<>") ? 2 : 0;

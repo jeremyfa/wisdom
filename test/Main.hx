@@ -34,7 +34,7 @@ class Main implements X #if tracker implements Observable #end {
 
         return '<>
             <div onclick=$increment>
-                Hello $name
+                Hello $name<br />
                 Count: ${count}
             </div>
         ';
@@ -49,6 +49,10 @@ class Main implements X #if tracker implements Observable #end {
 
     }
 
+    /**
+     * Observable variable. Changing it will trigger
+     * reactive vdom update on those that depend in the variable.
+     */
     @observe var name:String = 'John';
 
     function new() {
@@ -56,6 +60,7 @@ class Main implements X #if tracker implements Observable #end {
         final wisdom = new Wisdom([ClassModule.module(), StyleModule.module(), PropsModule.module(), AttributesModule.module(), ListenersModule.module()], new HtmlBackend());
 
         var cities = ['Paris', 'New York', 'Madrid'];
+        var names = ['John', 'Jane', 'Alan', 'Ellen', 'Jeremy', 'Joanna', 'Bob', 'Lucy'];
 
         #if tracker
 
@@ -65,30 +70,27 @@ class Main implements X #if tracker implements Observable #end {
             document.getElementById('container'),
             () -> '<>
 
-            <div class="align-left-$name">
+            <div class="cities-list">
 
-                <!-- hello -->
+                <p style=${{ color: "blue", fontWeight: 'bold' }}>All cities:</p>
 
-                <p style=${{ color: "blue$city", fontWeight: 'bold' }}>All cities:</p>
-
+                // Looping through each city
                 <foreach $cities ${(i:Int, city:String) -> '<>
+
+                    // Allows to reorder cities without loosing each
+                    // iteration component state (HelloAndCount)
                     <key ${city.toLowerCase().replace(' ','-')} />
 
-                    <if ${name == 'Bob 12'}>
-                        <HelloAndCount name="A1 $name in A1" />
-                        <p>Another tag</p>
-                    <elseif ${name == 'Bob 15'}>
-                        <HelloAndCount name="B $name in B" />
-                    <else>
-                        <HelloAndCount name="C $name in ${city.toLowerCase()}" />
-                    </if>
+                    // Invoke a custom component
+                    <HelloAndCount name=$name />
 
-                    <p key=${name+'-'+city}
-                    style=${{ color: "green" }} class="city-info">
-                        Hello $name, from $city!
+                    <p
+                    style=${{ color: "green" }}
+                    class="city-info">
+                        Hello $name,<br />from $city!
 
+                        // Tag guarded with a condition
                         <p style=${{ fontWeight: 'bold' }} if=${city == "Paris"}>Bonjour !</p>
-                        <p style=${{ fontWeight: 'bold' }} if=${city == "New York"}>Hi!</p>
                     </p>
 
                 '} />
@@ -97,9 +99,10 @@ class Main implements X #if tracker implements Observable #end {
 
         ');
 
+        // Change name over time
         var ticks = 1;
         window.setInterval(() -> {
-            name = 'Bob $ticks';
+            name = names[ticks % names.length];
             ticks++;
         }, 1000);
 
