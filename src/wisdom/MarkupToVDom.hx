@@ -856,6 +856,9 @@ class MarkupToVDom {
                     }
                     output.add('})');
                 }
+                else {
+                    output.add(', null');
+                }
 
                 var tagOutput = output;
                 output = prevOutput;
