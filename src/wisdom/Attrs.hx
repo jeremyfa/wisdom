@@ -13,16 +13,16 @@ abstract Attrs(DynamicAccess<String>) from DynamicAccess<String> to DynamicAcces
         return new Attrs(d);
     }
 
-    public inline function exists(attrs:String):Bool {
-        return this.exists(attrs);
+    public inline function exists(key:String):Bool {
+        return this.exists(key);
     }
 
-    public inline function get(attrs:String):Any {
-        return this.get(attrs);
+    public inline function get(key:String):Any {
+        return this.get(key);
     }
 
-    public inline function set(attrs:String, value:String):Void {
-        this.set(attrs, value);
+    public inline function set(key:String, value:String):Void {
+        this.set(key, value);
     }
 
     public inline function keys() {
