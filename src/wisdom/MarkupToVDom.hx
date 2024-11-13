@@ -66,7 +66,9 @@ class MarkupToVDom {
         "while" => true
     ];
 
-    static final RE_TAG_OPEN = ~/^<([a-zA-Z_][a-zA-Z_0-9]*)/;
+    static final RE_TAG_OPEN = ~/^<([a-zA-Z_][a-zA-Z_0-9\.]*)/;
+
+    static final RE_TAG_COMPONENT = ~/^((?:[a-z][a-zA-Z0-9_]*\.)*)?(?:(?:([A-Z][a-zA-Z0-9_]*)(\.))*)?([A-Z][a-zA-Z_0-9]*)$/;
 
     static final RE_TAG_CLOSE = ~/^<\/([a-zA-Z_][a-zA-Z_0-9]*)>/;
 
@@ -347,7 +349,7 @@ class MarkupToVDom {
         }
 
         final tag = RE_TAG_OPEN.matched(1);
-        final isComponent = tag.charAt(0).toLowerCase() != tag.charAt(0);
+        final isComponent = RE_TAG_COMPONENT.match(tag);
 
         var isFor = (tag == 'foreach');
         var forToIterate = null;

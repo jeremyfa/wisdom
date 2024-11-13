@@ -83,6 +83,7 @@ class Main implements X #if tracker implements Observable #end {
 
                     // Invoke a custom component
                     <HelloAndCount name=$name />
+                    // <testcomp.TestComp.HelloAndCount2 name=$name />
 
                     <p
                     style=${{ color: "green" }}

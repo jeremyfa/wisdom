@@ -6,7 +6,9 @@
         "**/tmp": true,
         "**/out": true
     },
+    "liveServer.settings.root": "./html",
     "haxe.configurations": [
         ["build-html.hxml", "-D", "completion"]
-    ]
+    ],
+    "liveServer.settings.port": 5501
 }
