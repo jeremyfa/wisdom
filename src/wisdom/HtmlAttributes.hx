@@ -149,6 +149,7 @@ class HtmlAttributes {
     ];
 
     public static function isValidAttribute(tag:String, attr:String):Bool {
+
         attr = attr.toLowerCase();
         tag = tag.toLowerCase();
 

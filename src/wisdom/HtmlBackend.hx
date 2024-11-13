@@ -265,7 +265,7 @@ class HtmlBackend extends Backend {
 
     public function isAttribute(sel:String, name:String):Bool {
 
-        return HtmlAttributes.isValidAttribute(sel, name);
+        return HtmlAttributes.isValidAttribute(sel, name) || SvgAttributes.isValidAttribute(sel, name);
 
     }
 

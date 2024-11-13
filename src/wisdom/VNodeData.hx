@@ -11,7 +11,5 @@ class VNodeData {
     public var hook:Hooks = null;
     public var key:Key = null;
     public var ns:String = null; // for SVGs
-    public var fn:()->VNode = null; // for thunks
-    public var args:Array<Any> = null; // for thunks
     public var isa:String = null; // for custom elements v1
 }
