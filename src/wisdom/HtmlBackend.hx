@@ -291,6 +291,16 @@ class HtmlBackend extends Backend {
 
     }
 
+    public function fallbackComponentVNode(xid:Xid, #if wisdom_debug , ?pos:haxe.PosInfos #end):VNode {
+
+        #if wisdom_debug
+        haxe.Log.trace('fallbackComponentVNode($xid)', pos);
+        #end
+
+        return VNode.vnode(xid, 'div', {}, [], null, null);
+
+    }
+
 }
 
 #end

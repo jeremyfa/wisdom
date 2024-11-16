@@ -66,4 +66,6 @@ abstract class Backend {
 
     abstract public function removeEventListener(elm:Element, event:String, listener:Function #if wisdom_debug , ?pos:haxe.PosInfos #end):Void;
 
+    abstract public function fallbackComponentVNode(xid:Xid, #if wisdom_debug , ?pos:haxe.PosInfos #end):VNode;
+
 }

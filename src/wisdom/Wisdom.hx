@@ -21,6 +21,8 @@ class Wisdom implements X {
 
     static final EMPTY_NODE = VNode.vnode(null, "", {}, [], null, null);
 
+    static final EMPTY_ARRAY:Array<Any> = [];
+
     static final SVG_NS = "http://www.w3.org/2000/svg";
 
     final cbs = new ModuleHooks();
@@ -735,6 +737,20 @@ class Wisdom implements X {
 
         if (renderComponent != null) {
             return renderComponent(comp, computedXid, data, children);
+        }
+        else if (!Reflect.isFunction(comp)) {
+            // When there is no custom `renderComponent`, the component is created
+            // and destroyed on the fly because there is now way to keep its state
+            // TODO: support keeping the component instances anyway?
+            final _comp = (xid:Xid, ctx:ReactiveContext, data:VNodeData, children:Array<VNode>) -> {
+                var instance = Type.createInstance(comp, EMPTY_ARRAY);
+                instance.update(xid, ctx, data, children);
+                var result = instance.render();
+                instance.destroy();
+                instance = null;
+                return result;
+            }
+            return _comp(computedXid, null, data, children);
         }
         else {
             final _comp:(xid:Xid, ctx:ReactiveContext, data:VNodeData, children:Array<VNode>)->Any = comp;

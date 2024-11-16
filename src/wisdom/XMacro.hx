@@ -16,6 +16,14 @@ class XMacro {
     // expensive operations when an error happens
     static var macroHasErrors:Bool = false;
 
+    macro static public function makePropsObservable():Void {
+
+        #if tracker
+        tracker.macros.ObservableMacro.addObservableMeta('props');
+        #end
+
+    }
+
     macro static public function build():Array<Field> {
 
         var fields = Context.getBuildFields();
@@ -33,7 +41,7 @@ class XMacro {
 
                 case FFun(f):
                     var stateFields:Map<String,FunctionArg> = null;
-                    if (hasXMeta(field)) {
+                    if (hasXMeta(field.meta)) {
                         stateFields = transformWisdomComponent(field);
                     }
                     f.expr = processInlineMarkup(f.expr);
@@ -52,11 +60,11 @@ class XMacro {
 
     }
 
-    static function hasXMeta(field:Field):Bool {
+    static function hasXMeta(meta:Metadata):Bool {
 
-        if (field.meta == null || field.meta.length == 0) return false;
+        if (meta == null || meta.length == 0) return false;
 
-        for (meta in field.meta) {
+        for (meta in meta) {
             if (meta.name == 'x') {
                 return true;
             }
@@ -107,7 +115,7 @@ class XMacro {
                 },
                 {
                     name: 'children',
-                    type: macro :Array<wisdom_.VNodeData>
+                    type: macro :Array<wisdom_.VNode>
                 }];
                 #end
 
@@ -216,6 +224,8 @@ class XMacro {
     static function processStateFields(e:Expr, stateFields:Map<String,FunctionArg>, observe:Bool = true, ?consumed:Map<Expr,Bool>):Expr {
 
         // TODO stop on shadowed state variables
+
+        if (e == null) return null;
 
         if (consumed == null) consumed = new Map();
         if (consumed.exists(e)) return e;
@@ -335,6 +345,8 @@ class XMacro {
 
     static function processInlineMarkup(e:Expr, ?consumed:Map<Expr,Bool>):Expr {
 
+        if (e == null) return null;
+
         if (consumed == null) consumed = new Map();
         if (consumed.exists(e)) return e;
         consumed.set(e, true);
@@ -380,6 +392,11 @@ class XMacro {
                 #if !completion
                 res = '{wisdom_.Wisdom.begin(); final vdom_ = $res; wisdom_.Wisdom.end(); vdom_;}';
                 #end
+                #if wisdom_print_vnode_haxe
+                @:privateAccess if (markup2vdom.output != null) {
+                    trace(markup2vdom.output.toString());
+                }
+                #end
                 for (i in markup2vdom.componentTagPos) {
                     s = s.substring(0, i + offset) + "$" + s.substring(i + offset + 1);
                 }
@@ -388,7 +405,9 @@ class XMacro {
                 #end
             }
             catch (e:MarkupToVDom.MarkupToVDomError) {
-                trace(@:privateAccess markup2vdom.output.toString());
+                @:privateAccess if (markup2vdom.output != null) {
+                    trace(markup2vdom.output.toString());
+                }
                 macroHasErrors = true;
                 final posInfos = PositionTools.getInfos(pos);
                 Context.error(
@@ -404,10 +423,11 @@ class XMacro {
         #if !completion
         return Context.parse('null', pos);
         #else
-        return {
+        var resExpr:Expr = {
             expr: EConst(CString(s, kind)),
             pos: pos
         };
+        return macro cast $resExpr;
         #end
 
     }

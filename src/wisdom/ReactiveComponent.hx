@@ -10,7 +10,9 @@ class ReactiveComponent implements Observable {
 
     public var xid(default, null):Xid;
 
-    public var comp(default, null):(xid:Xid, ctx:ReactiveContext, data:VNodeData, children:Array<VNode>)->Any;
+    public var compFunc(default, null):(xid:Xid, ctx:ReactiveContext, data:VNodeData, children:Array<VNode>)->Any;
+
+    public var compInstance(default, null):Component;
 
     public var autorun(default, null):Autorun;
 
@@ -26,7 +28,7 @@ class ReactiveComponent implements Observable {
 
     public function new(
         xid:Xid,
-        comp:(xid:Xid, ctx:ReactiveContext, data:VNodeData, children:Array<VNode>)->Any,
+        comp:Any,
         data:VNodeData,
         children:Array<VNode>,
         reactiveContext:ReactiveContext,
@@ -34,7 +36,18 @@ class ReactiveComponent implements Observable {
         ) {
 
         this.xid = xid;
-        this.comp = comp;
+
+        if (Reflect.isFunction(comp)) {
+            this.compFunc = comp;
+            this.compInstance = null;
+        }
+        else {
+            this.compFunc = null;
+            this.compInstance = Type.createInstance(
+                comp,
+                @:privateAccess Wisdom.EMPTY_ARRAY
+            );
+        }
 
         this.data = data;
         this.children = children;
@@ -57,9 +70,20 @@ class ReactiveComponent implements Observable {
             if (rendered == null || _prevReactiveContext == reactiveContext) {
 
                 // Rendering from parent node or first render
-                var renderedRaw = comp(xid, reactiveContext, data, children);
+                var renderedRaw = null;
+                if (compFunc != null) {
+                    renderedRaw = compFunc(xid, reactiveContext, data, children);
+                }
+                else {
+                    @:privateAccess compInstance.update(xid, reactiveContext, data, children);
+                    renderedRaw =  @:privateAccess compInstance.render();
+                }
 
                 unobserve();
+
+                if (renderedRaw == null) {
+                    renderedRaw = reactiveContext.wisdom.backend.fallbackComponentVNode(xid);
+                }
 
                 if (renderedRaw is Array) {
                     throw 'A reactive component must return a single node, not an array';
@@ -78,7 +102,15 @@ class ReactiveComponent implements Observable {
                 Reactive.currentReactiveContext = reactiveContext;
 
                 final _prevRendered = rendered;
-                var renderedRaw = comp(xid, reactiveContext, data, children);
+
+                var renderedRaw = null;
+                if (compFunc != null) {
+                    renderedRaw = compFunc(xid, reactiveContext, data, children);
+                }
+                else {
+                    @:privateAccess compInstance.update(xid, reactiveContext, data, children);
+                    renderedRaw =  @:privateAccess compInstance.render();
+                }
 
                 Wisdom.baseXid = _prevBaseXid;
                 Wisdom.renderComponent = _prevRenderComponent;
@@ -86,8 +118,11 @@ class ReactiveComponent implements Observable {
 
                 unobserve();
 
+                if (renderedRaw == null) {
+                    renderedRaw = reactiveContext.wisdom.backend.fallbackComponentVNode(xid);
+                }
+
                 if (renderedRaw is Array) {
-                    //renderedRaw = VNode.vnode("", {}, renderedRaw, null, null);
                     throw 'A reactive component must return a single node, not an array';
                 }
 
@@ -122,7 +157,12 @@ class ReactiveComponent implements Observable {
             autorun = null;
         }
 
-        comp = null;
+        if (compInstance != null) {
+            compInstance.destroy();
+            compInstance = null;
+        }
+
+        compFunc = null;
         data = null;
         children = null;
         rendered = null;

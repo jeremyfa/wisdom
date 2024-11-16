@@ -80,7 +80,7 @@ class MarkupToVDom {
 
     static final RE_INTEGER = ~/^([0-9]+)$/;
 
-    static final RE_ATTR = ~/^([a-zA-Z_][a-zA-Z_0-9\-]*)(?:\s*( |=)\s*("|\$))?/;
+    static final RE_ATTR = ~/^([a-zA-Z_][a-zA-Z_0-9\-]*)(?:\s*( |=)\s*("|\$|[\.0-9tfn]))?/;
 
     static final RE_ANY_NUMBER = ~/^(0x[0-9a-fA-F]+|(?:(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][+-]?[0-9]+)?))/;
 
@@ -229,6 +229,11 @@ class MarkupToVDom {
                 }
             }
 
+        }
+
+        // Ensure we return a valid expression
+        if (output.toString().trim().length == 0) {
+            output.add('null');
         }
 
     }
@@ -501,6 +506,37 @@ class MarkupToVDom {
                 }
                 else if (assignStart == "$") {
                     attrValues.push(parseDollarValue());
+                }
+                else if (assignStart.length == 1) {
+                    // Number, bool or null expr
+                    i--;
+                    var assignExpr = null;
+                    switch assignStart.charAt(0) {
+                        case 't':
+                            if (input.substr(i, 4) == 'true') {
+                                i += 4;
+                                assignExpr = 'true';
+                            }
+                        case 'f':
+                            if (input.substr(i, 5) == 'false') {
+                                i += 5;
+                                assignExpr = 'false';
+                            }
+                        case 'n':
+                            if (input.substr(i, 4) == 'null') {
+                                i += 4;
+                                assignExpr = 'null';
+                            }
+                        case _:
+                            if (RE_ANY_NUMBER.match(input.substr(i))) {
+                                assignExpr = RE_ANY_NUMBER.matched(0);
+                                i += assignExpr.length;
+                            }
+                    }
+                    if (assignExpr == null) {
+                        fail(i + iOffset, "Unexpected '" + c + "' in <" + tag + " ... /> (parseTagOpen)");
+                    }
+                    attrValues.push(assignExpr);
                 }
                 else {
                     attrValues.push(attr);

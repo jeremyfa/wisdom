@@ -82,7 +82,7 @@ class Reactive {
 
     }
 
-    static function renderReactiveComponent(comp:(xid:Xid, ctx:ReactiveContext, data:VNodeData, children:Array<VNode>)->Any, xid:Xid, data:VNodeData, children:Array<VNode>):Any {
+    static function renderReactiveComponent(comp:Any, xid:Xid, data:VNodeData, children:Array<VNode>):Any {
 
         var reactiveComponent = Reactive.currentReactiveContext.components.get(xid);
 
