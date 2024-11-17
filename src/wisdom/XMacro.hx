@@ -46,7 +46,7 @@ class XMacro {
                     }
                     f.expr = processInlineMarkup(f.expr);
 
-                    #if !completion
+                    #if !(completion || display)
                     if (stateFields != null) {
                         f.expr = processStateFields(f.expr, stateFields);
                     }
@@ -98,7 +98,7 @@ class XMacro {
 
             case FFun(fn):
 
-                #if !completion
+                #if !(completion || display)
                 // Convert arguments
                 var rawArgs = fn.args;
                 fn.args = [{
@@ -148,7 +148,7 @@ class XMacro {
                         }]);
                 }
 
-                #if !completion
+                #if !(completion || display)
 
                 var printer = new haxe.macro.Printer();
 
@@ -389,7 +389,7 @@ class XMacro {
             final offset = s.startsWith("<>") ? 2 : 0;
             try {
                 var res = markup2vdom.convert(offset > 0 ? s.substr(offset) : s);
-                #if !completion
+                #if !(completion || display)
                 res = '{wisdom_.Wisdom.begin(); final vdom_ = $res; wisdom_.Wisdom.end(); vdom_;}';
                 #end
                 #if wisdom_print_vnode_haxe
@@ -400,7 +400,7 @@ class XMacro {
                 for (i in markup2vdom.componentTagPos) {
                     s = s.substring(0, i + offset) + "$" + s.substring(i + offset + 1);
                 }
-                #if !completion
+                #if !(completion || display)
                 return Context.parse(res, pos);
                 #end
             }
@@ -420,7 +420,7 @@ class XMacro {
                 );
             }
         }
-        #if !completion
+        #if !(completion || display)
         return Context.parse('null', pos);
         #else
         var resExpr:Expr = {

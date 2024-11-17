@@ -499,7 +499,7 @@ class Wisdom implements X {
 
     }
 
-    #if completion
+    #if (completion || display)
 
     public function patch(
         oldVnode:Any,
@@ -659,7 +659,7 @@ class Wisdom implements X {
 
     }
 
-    #if completion
+    #if (completion || display)
 
     public static function c(xid:Xid, comp:Any, ?b:Any, ?c:Any):Any {
 

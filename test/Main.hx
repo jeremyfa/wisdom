@@ -2,6 +2,7 @@ package;
 
 import js.Browser.document;
 import js.Browser.window;
+import testcomp.HelloAndCount3;
 import wisdom.HtmlBackend;
 import wisdom.Wisdom;
 import wisdom.X;
@@ -82,7 +83,7 @@ class Main implements X #if tracker implements Observable #end {
                     <key ${city.toLowerCase().replace(' ','-')} />
 
                     // Invoke a custom component
-                    <HelloAndCount name=$name />
+                    <HelloAndCount3 name=$name />
                     // <testcomp.TestComp.HelloAndCount2 name=$name />
 
                     <p
