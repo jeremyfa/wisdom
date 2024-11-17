@@ -66,7 +66,7 @@ class Reactive {
         });
 
         if (renderedAny != null) {
-            if (!(renderedAny is VNode)) {
+            if (!VNode.isVNode(renderedAny)) {
                 throw "The root of a reactive vdom must be a single VNode";
             }
         }

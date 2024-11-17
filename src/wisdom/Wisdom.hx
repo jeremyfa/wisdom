@@ -686,7 +686,7 @@ class Wisdom implements X {
             else if (Is.primitive(c)) {
                 text = Std.string(c);
             }
-            else if (c != null && (c is VNodeData || c is VNode)) {
+            else if (c != null && (c is VNodeData || VNode.isVNode(c))) {
                 children = [c];
             }
         }
@@ -779,7 +779,7 @@ class Wisdom implements X {
             else if (Is.primitive(c)) {
                 text = Std.string(c);
             }
-            else if (c != null && (c is VNodeData || c is VNode)) {
+            else if (c != null && (c is VNodeData || VNode.isVNode(c))) {
                 children = [c];
             }
         }
@@ -790,9 +790,6 @@ class Wisdom implements X {
             else if (Is.primitive(b)) {
                 text = Std.string(b);
             }
-            // else if (b is VNodeData || b is VNode) {
-            //     children = [b];
-            // }
             else {
                 data = b;
             }
@@ -884,7 +881,7 @@ class Wisdom implements X {
         if (sel != "foreignObject" && children != null) {
             for (i in 0...children.length) {
                 final child = children[i];
-                if (!(child is VNode)) continue;
+                if (!VNode.isVNode(child)) continue;
                 final childNode:VNode = child;
                 final childData = childNode.data;
                 if (childData != null) {

@@ -69,7 +69,7 @@ class ReactiveContext {
         );
 
         if (!isRoot && rendered != prevRendered) {
-            if (container is VNode && prevRendered is VNode && rendered is VNode) {
+            if (VNode.isVNode(container) && VNode.isVNode(prevRendered) && VNode.isVNode(rendered)) {
                 replaceVNode(container, prevRendered, rendered);
             }
         }

@@ -1,1 +1,2 @@
 --remap wisdom_:wisdom
+--macro wisdom.XMacro.makePropsObservable()

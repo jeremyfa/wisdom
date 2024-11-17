@@ -28,7 +28,7 @@ abstract class Component implements X #if tracker implements tracker.Observable 
 
     }
 
-    abstract function render(): #if completion Any #else VNode #end;
+    abstract function render():VNode;
 
     #if tracker
     override function destroy() {
