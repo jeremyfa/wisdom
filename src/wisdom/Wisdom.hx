@@ -340,7 +340,7 @@ class Wisdom implements X {
         var newStartVnode = newCh[0];
         var newEndVnode = newCh[newEndIdx];
         var oldKeyToIdx:Null<KeyToIndexMap> = null;
-        var idxInOld:Int;
+        var idxInOld:Null<Int>;
         var elmToMove:VNode = null;
         var before:Any;
 

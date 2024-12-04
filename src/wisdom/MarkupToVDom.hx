@@ -17,6 +17,9 @@ class MarkupToVDomError {
 
 class MarkupToVDom {
 
+    @:persistent static var componentPaths:Map<String,Int> = new Map();
+    @:persistent static var nextComponentPathIndex:Int = 1;
+
     static final RESERVED_KEYWORDS:Map<String,Bool> = [
         "abstract" => true,
         "break" => true,
@@ -757,6 +760,17 @@ class MarkupToVDom {
 
                 var keyIndex = attrKeys != null ? attrKeys.indexOf('key') : -1;
                 var xidExpr = (keyIndex != -1 ? attrValues[keyIndex] : Std.string(nodes.length));
+
+                var realTag = getRealTag(tag);
+                var shortComponentPath = if (componentPaths.exists(realTag)) {
+                    componentPaths.get(realTag);
+                }
+                else {
+                    var index = nextComponentPathIndex++;
+                    componentPaths.set(realTag, index);
+                    index;
+                }
+                xidExpr += '+"~$shortComponentPath"';
 
                 currentPath.push(xidExpr);
 

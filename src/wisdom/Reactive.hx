@@ -86,6 +86,14 @@ class Reactive {
 
         var reactiveComponent = Reactive.currentReactiveContext.components.get(xid);
 
+        // If the xid is already mapped to a component, still
+        // check that this component is of the same type (likely)
+        if (reactiveComponent != null && !Reflect.isFunction(comp)) {
+            if (reactiveComponent.compInstance == null || Type.getClass(reactiveComponent.compInstance) != comp) {
+                reactiveComponent = null;
+            }
+        }
+
         if (reactiveComponent == null) {
             reactiveComponent = new ReactiveComponent(
                 xid, comp, data, children,

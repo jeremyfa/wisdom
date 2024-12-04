@@ -1,7 +1,10 @@
 package;
 
+#if wisdom_html
 import js.Browser.document;
 import js.Browser.window;
+#end
+
 import testcomp.HelloAndCount3;
 import wisdom.HtmlBackend;
 import wisdom.Wisdom;
@@ -58,7 +61,14 @@ class Main implements X #if tracker implements Observable #end {
 
     function new() {
 
-        final wisdom = new Wisdom([ClassModule.module(), StyleModule.module(), PropsModule.module(), AttributesModule.module(), ListenersModule.module()], new HtmlBackend());
+        final wisdom = new Wisdom([
+            ClassModule.module(), StyleModule.module(), PropsModule.module(), AttributesModule.module(), ListenersModule.module()],
+            #if wisdom_html
+            new HtmlBackend()
+            #else
+            null // TODO
+            #end
+        );
 
         var cities = ['Paris', 'New York', 'Madrid'];
         var names = ['John', 'Jane', 'Alan', 'Ellen', 'Jeremy', 'Joanna', 'Bob', 'Lucy'];
@@ -68,7 +78,11 @@ class Main implements X #if tracker implements Observable #end {
         // Example with reactivity and tracker library
 
         wisdom.reactive(
-            document.getElementById('container'),
+            #if wisdom_html
+            document.getElementById('container')
+            #else
+            null // TODO
+            #end,
             () -> '<>
 
             <div class="cities-list">
@@ -103,17 +117,23 @@ class Main implements X #if tracker implements Observable #end {
 
         // Change name over time
         var ticks = 1;
+        #if wisdom_html
         window.setInterval(() -> {
             name = names[ticks % names.length];
             ticks++;
         }, 1000);
+        #end
 
         #else
 
         // Example without reactivity and tracker library
 
         wisdom.patch(
-            document.getElementById('container'),
+            #if wisdom_html
+            document.getElementById('container')
+            #else
+            null // TODO
+            #end,
             '<>
                 <div class="align-left">
 
