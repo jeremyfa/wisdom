@@ -373,7 +373,7 @@ When [tracker](https://github.com/jeremyfa/tracker) is available, you can create
 ```haxe
 wisdom.reactive(
     document.getElementById('container'),
-    '<>
+    () -> '<>
         <div class="reactive-wisdom">
             The best reaction is wisdom.
             <HelloAndCount name="Jane" />
@@ -383,6 +383,8 @@ wisdom.reactive(
 ```
 
 When using `wisdom.reactive()`, the virtual dom will be patched automatically any time an observable value that it depends on changes.
+
+_Notice the addition of `() -> ` before `'<> ...`. This is because we are providing a function that will be called everytime something it depends on has changed._
 
 ### Components with reactive state
 
