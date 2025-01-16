@@ -276,7 +276,9 @@ class MarkupToVDom {
                     else {
                         add("'".code);
                         add("+".code);
+                        add("(".code);
                         text.add(parseDollarValue());
+                        add(")".code);
                         add("+".code);
                         add("'".code);
                     }
