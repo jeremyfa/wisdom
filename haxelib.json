@@ -3,10 +3,10 @@
     "url" : "https://github.com/jeremyfa/wisdom/",
     "license": "MIT",
     "tags": ["virtual", "dom", "vdom", "virtualdom", "react", "snabbdom", "wisdom", "markup", "jsx"],
-    "description": "A Haxe port of snabbdom, a virtual DOM library with a focus on simplicity, modularity, powerful features and performance.",
-    "version": "0.1.4",
+    "description": "A portable and modular virtual DOM library for Haxe, with inline markup support.",
+    "version": "0.1.5",
     "classPath": "src/",
-    "releasenote": "Fix children not always being properly updated when a child reactive component has changed",
+    "releasenote": "Fix bad priority in interpolation",
     "contributors": ["jeremyfa"],
     "dependencies": {}
-  }
+}
