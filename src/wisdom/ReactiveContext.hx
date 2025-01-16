@@ -80,25 +80,39 @@ class ReactiveContext {
 
     function replaceVNode(vnode:VNode, toReplace:VNode, replacement:VNode):Bool {
 
+        var replaced = false;
         if (vnode != null) {
+            final compChildren = vnode.reactiveComponent?.children;
+            if (compChildren != null) {
+                for (j in 0...compChildren.length) {
+                    final compChild = compChildren[j];
+                    if (compChild == toReplace) {
+                        compChildren[j] = replacement;
+                        replaced = true;
+                        break;
+                    }
+                }
+            }
             final children = vnode.children;
             if (children != null) {
                 for (i in 0...children.length) {
                     final child = children[i];
                     if (child == toReplace) {
                         children[i] = replacement;
-                        return true;
+                        replaced = true;
+                        break;
                     }
                     else {
                         if (replaceVNode(child, toReplace, replacement)) {
-                            return true;
+                            replaced = true;
+                            break;
                         }
                     }
                 }
             }
         }
 
-        return false;
+        return replaced;
 
     }
 
