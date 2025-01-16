@@ -1,12 +1,9 @@
 package;
 
-#if wisdom_html
-import js.Browser.document;
-import js.Browser.window;
-#end
-
 import testcomp.HelloAndCount3;
+import wisdom.Component;
 import wisdom.HtmlBackend;
+import wisdom.VNode;
 import wisdom.Wisdom;
 import wisdom.X;
 import wisdom.modules.AttributesModule;
@@ -16,10 +13,33 @@ import wisdom.modules.PropsModule;
 import wisdom.modules.StyleModule;
 
 using StringTools;
+#if wisdom_html
+import js.Browser.document;
+import js.Browser.window;
+#end
+
 
 #if tracker
 import tracker.Observable;
 #end
+
+class TestComp2 extends Component
+{
+    @props var name:String;
+
+    @observe var count:Int = 0;
+
+    function increment()
+    {
+        count++;
+    }
+
+    function render() '<>
+        <div onclick=$increment>
+            Count: $count
+        </div>
+    ';
+}
 
 class Main implements X #if tracker implements Observable #end {
 
@@ -43,6 +63,27 @@ class Main implements X #if tracker implements Observable #end {
             </div>
         ';
 
+    }
+
+    @x function HelloCount(
+        name:String,
+        @state count:Int = 0,
+        children:Array<VNode>
+    ) {
+        function increment()
+        {
+            count++;
+        }
+
+        return '<>
+            <div>
+                <h1>Hello $name</h1> <br/>
+                <div onclick=$increment>
+                    Count $count
+                </div>
+                $children
+            </div>
+        ';
     }
 
     #end

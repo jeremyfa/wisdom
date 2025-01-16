@@ -1,0 +1,11 @@
+-cp src
+-cp test
+--main Main
+--hl hl/wisdom.c
+--library tracker
+#-D wisdom_debug
+--debug
+extraParams.hxml
+
+--next
+
