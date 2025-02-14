@@ -4,9 +4,9 @@
     "license": "MIT",
     "tags": ["virtual", "dom", "vdom", "virtualdom", "react", "snabbdom", "wisdom", "markup", "jsx"],
     "description": "A portable and modular virtual DOM library for Haxe, with inline markup support.",
-    "version": "0.1.5",
+    "version": "0.1.6",
     "classPath": "src/",
-    "releasenote": "Fix bad priority in interpolation",
+    "releasenote": "Fix component not being destroyed when removed from a modified vNode",
     "contributors": ["jeremyfa"],
     "dependencies": {}
 }
