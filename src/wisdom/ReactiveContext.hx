@@ -29,9 +29,32 @@ class ReactiveContext {
         this.container = container;
 
         hooks = {
+            update: updateHook,
             remove: removeHook,
             destroy: destroyHook
         };
+
+    }
+
+    function updateHook(wisdom:Wisdom, oldVNode:VNode, vNode:VNode) {
+
+        if (oldVNode != null && oldVNode.reactiveComponent != null) {
+            final oldXid = oldVNode.reactiveComponent.xid;
+            if (components.exists(oldXid)) {
+                final oldComponent = components.get(oldXid);
+                final newXid = vNode?.reactiveComponent?.xid;
+                if (newXid != oldXid) {
+                    // Looks like the element is preserved, but doesn't
+                    // belong to that component anymore, so the former
+                    // component should be destroyed.
+                    // TODO: could it be possible that the component is still
+                    // used somewhere else?
+                    components.remove(oldXid);
+                    oldComponent.destroy();
+                    oldVNode.reactiveComponent = null;
+                }
+            }
+        }
 
     }
 
@@ -50,6 +73,7 @@ class ReactiveContext {
 
     function checkRemovedNodeComponent(node:VNode) {
 
+        // TODO check if that component is still used in the tree somewhere else?
         if (node != null && node.reactiveComponent != null && components.exists(node.reactiveComponent.xid)) {
             var reactiveComponent = node.reactiveComponent;
             components.remove(reactiveComponent.xid);
