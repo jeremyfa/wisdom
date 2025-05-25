@@ -662,7 +662,7 @@ class MarkupToVDom {
                     i++;
 
                     if (!isIf) {
-                        output.add(' [');
+                        output.add(' [null');
                     }
 
                     var tagOutput = output;

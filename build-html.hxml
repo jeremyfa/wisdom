@@ -3,6 +3,7 @@
 --main Main
 --js html/app.js
 -D wisdom_html
+#-D wisdom_print_vnode_haxe
 --library tracker
 #-D wisdom_debug
 --debug
