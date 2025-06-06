@@ -140,7 +140,7 @@ class HtmlAttributes {
         VALIGN => ["valign"],
         DIMS => ["width", "height", "size"],
         MEDIA => ["crossorigin", "preload", "autoplay", "loop", "controls", "muted"],
-        FORM => ["name", "value", "type", "disabled", "required", "readonly", "placeholder", "autocomplete", "autofocus", "form", "maxlength", "minlength", "pattern"],
+        FORM => ["action", "accept-charset", "enctype", "method", "name", "novalidate", "value", "target", "type", "disabled", "rel", "required", "readonly", "placeholder", "autocomplete", "autofocus", "form", "maxlength", "minlength", "pattern"],
         SRC => ["src", "srcset", "alt", "loading"],
         HREF => ["href", "target", "rel", "download", "hreflang", "referrerpolicy"],
         META => ["content", "charset", "name", "http-equiv", "scheme"],
