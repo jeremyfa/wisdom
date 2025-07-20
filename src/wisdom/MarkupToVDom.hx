@@ -93,7 +93,7 @@ class MarkupToVDom {
 
     var input:String = null;
 
-    var output:StringBuf = null;
+    var output:MarkupToVDomStringBuf = null;
 
     var nodes:Array<String> = [];
 
@@ -126,7 +126,7 @@ class MarkupToVDom {
     public function convert(input:String, i:Int = 0, iOffset:Int = 0, ?componentTagPos:Array<Int>, parseUntil:Int = -1, ?currentPath:Array<String>, numIter:Int = 0, ?parent:MarkupToVDom):String {
 
         this.input = input;
-        this.output = new StringBuf();
+        this.output = new MarkupToVDomStringBuf();
         this.nodes = [];
         this.i = i;
         this.iOffset = iOffset;
@@ -400,7 +400,7 @@ class MarkupToVDom {
         }
 
         var prevOutput = output;
-        output = new StringBuf();
+        output = new MarkupToVDomStringBuf();
 
         if (isFor) {
             output.add("{wisdom_.Wisdom.iPush(); final foreach_ = [for (iter_ in ");
@@ -662,7 +662,7 @@ class MarkupToVDom {
                     i++;
 
                     if (!isIf) {
-                        output.add(' [null');
+                        output.add(' [');
                     }
 
                     var tagOutput = output;
@@ -990,7 +990,7 @@ class MarkupToVDom {
 
     }
 
-    function processTernaryCloses(output:StringBuf) {
+    function processTernaryCloses(output:MarkupToVDomStringBuf) {
 
         final numTernaryClose = tagTernaryStack.pop();
         for (_ in 0...numTernaryClose) {
@@ -1008,7 +1008,7 @@ class MarkupToVDom {
 
     function serializePath(currentPath:Array<String>):String {
 
-        var result = new StringBuf();
+        var result = new MarkupToVDomStringBuf();
         result.addChar('"'.code);
 
         for (item in currentPath) {
@@ -1126,7 +1126,7 @@ class MarkupToVDom {
     function parseAttrStrValue() {
 
         var prevOutput = output;
-        output = new StringBuf();
+        output = new MarkupToVDomStringBuf();
         parseDoubleQuotedString(true);
         var str = output.toString();
         output = prevOutput;
@@ -1142,7 +1142,7 @@ class MarkupToVDom {
         if (c == '{'.code) {
             i++;
             var prevOutput = output;
-            output = new StringBuf();
+            output = new MarkupToVDomStringBuf();
             parseAsIsUntil('}'.code);
             final value = output.toString();
             output = prevOutput;
@@ -1389,4 +1389,64 @@ class MarkupToVDom {
 
     }
 
+}
+
+class MarkupToVDomStringBuf {
+    public var length(get, never):Int;
+    inline function get_length():Int {
+        return codes.length;
+    }
+    final codes:Array<Int> = [];
+
+    var inString:Bool = false;
+    var escapeChar:Bool = false;
+
+    public function new() {}
+
+    public inline function add(x:Dynamic):Void {
+        final str = Std.string(x);
+        final len = str.length;
+        for (i in 0...len) {
+            addChar(str.charCodeAt(i));
+        }
+    }
+
+    public function addChar(c:Int):Void {
+
+        // Special handling to handle edge cases like [,
+        // that should be replaced with [ on the fly.
+        // Not very elegant, but that simplifies vdom conversion code overall
+        if (escapeChar) {
+            escapeChar = false;
+        }
+        else if (c == "\\".code) {
+            escapeChar = true;
+        }
+        else if (c == '"'.code) {
+            inString = !inString;
+        }
+
+        // Special handling only when not in string
+        if (!inString) {
+            if (c == ",".code) {
+                var i = codes.length - 1;
+                while (i >= 0 && codes[i] == " ".code) i--;
+                if (i >= 0 && codes[i] == "[".code) {
+                    // Skip adding colon right after [
+                    // (when not in string)
+                    return;
+                }
+            }
+        }
+
+        codes.push(c);
+    }
+
+    public function toString():String {
+        final buf = new StringBuf();
+        for (code in codes) {
+            buf.addChar(code);
+        }
+        return buf.toString();
+    }
 }
