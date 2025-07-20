@@ -36,7 +36,18 @@ class PropsModule {
                     wisdom.backend.setProp(elm, name, val);
 
                     if (val != null && wisdom.backend.isAttribute(vnode.sel, name)) {
-                        wisdom.backend.setAttribute(elm, name, Std.string(val));
+                        if (val is Bool) {
+                            // Boolean attribute like selected, disabled...
+                            if ((val:Bool)) {
+                                wisdom.backend.setAttribute(elm, name, name);
+                            }
+                            else {
+                                wisdom.backend.removeAttribute(elm, name);
+                            }
+                        }
+                        else {
+                            wisdom.backend.setAttribute(elm, name, Std.string(val));
+                        }
                     }
                 }
             }
