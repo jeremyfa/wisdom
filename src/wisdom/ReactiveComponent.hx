@@ -63,11 +63,16 @@ class ReactiveComponent implements Observable {
 
         autorun = new Autorun(() -> {
 
+            reactiveContext.beginReaction();
+
             final _prevBaseXid = Wisdom.baseXid;
             final _prevRenderComponent = Wisdom.renderComponent;
             final _prevReactiveContext = Reactive.currentReactiveContext;
 
             if (rendered == null || _prevReactiveContext == reactiveContext) {
+
+                // Use correct base xid for sub-components
+                Wisdom.baseXid = xid;
 
                 // Rendering from parent node or first render
                 var renderedRaw = null;
@@ -78,6 +83,9 @@ class ReactiveComponent implements Observable {
                     @:privateAccess compInstance.update(xid, reactiveContext, data, children);
                     renderedRaw =  @:privateAccess compInstance.render();
                 }
+
+                // Restore base xid
+                Wisdom.baseXid = _prevBaseXid;
 
                 unobserve();
 
@@ -134,6 +142,8 @@ class ReactiveComponent implements Observable {
                     renderedNode
                 );
             }
+
+            reactiveContext.endReaction();
 
         });
 

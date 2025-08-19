@@ -3,6 +3,7 @@ package wisdom;
 #if tracker
 
 import tracker.Autorun;
+import tracker.Immediate;
 import tracker.Tracker;
 
 class ReactiveContext {
@@ -22,6 +23,12 @@ class ReactiveContext {
     public var states(default, null):Map<Xid,State> = new Map();
 
     public var hooks(default, null):Module = null;
+
+    public var immediate(default, null):Immediate = new Immediate();
+
+    var numReactions:Int = 0;
+
+    var componentsToCheck:Map<Xid,ReactiveComponent> = new Map();
 
     public function new(wisdom:Wisdom, container:Any) {
 
@@ -45,12 +52,9 @@ class ReactiveContext {
                 final newXid = vNode?.reactiveComponent?.xid;
                 if (newXid != oldXid) {
                     // Looks like the element is preserved, but doesn't
-                    // belong to that component anymore, so the former
-                    // component should be destroyed.
-                    // TODO: could it be possible that the component is still
-                    // used somewhere else?
-                    components.remove(oldXid);
-                    oldComponent.destroy();
+                    // belong to that component anymore, so we add the component and xid
+                    // to the list of components to check after all reactions have been processed
+                    componentsToCheck.set(oldXid, oldComponent);
                     oldVNode.reactiveComponent = null;
                 }
             }
@@ -73,11 +77,9 @@ class ReactiveContext {
 
     function checkRemovedNodeComponent(node:VNode) {
 
-        // TODO check if that component is still used in the tree somewhere else?
         if (node != null && node.reactiveComponent != null && components.exists(node.reactiveComponent.xid)) {
             var reactiveComponent = node.reactiveComponent;
-            components.remove(reactiveComponent.xid);
-            reactiveComponent.destroy();
+            componentsToCheck.set(reactiveComponent.xid, reactiveComponent);
             node.reactiveComponent = null;
         }
 
@@ -169,6 +171,81 @@ class ReactiveContext {
         final state:State = {};
         states.set(xid, state);
         return state;
+
+    }
+
+    public function beginReaction():Void {
+
+        #if wisdom_debug_reactions
+        if (numReactions == 0) {
+            trace('- begin reactions -');
+        }
+        #end
+
+        numReactions++;
+
+    }
+
+    public function endReaction():Void {
+
+        immediate.oncePostFlushImmediate(handleEndOfReaction);
+
+    }
+
+    function handleEndOfReaction():Void {
+
+        numReactions--;
+        if (numReactions == 0) {
+            postAllReactions();
+        }
+
+    }
+
+    function postAllReactions():Void {
+
+        #if wisdom_debug_reactions
+        trace('- end reactions -');
+        #end
+
+        if (VNode.isVNode(container)) {
+            var usedComponents = new Map<Xid,ReactiveComponent>();
+            collectVNodeComponents(container, usedComponents);
+            for (xid => comp in componentsToCheck) {
+                if (!usedComponents.exists(xid)) {
+                    #if wisdom_debug_reactions
+                    trace('cleanup: ' + xid + ' (' + Type.getClassName(Type.getClass(comp.compInstance)) + ')');
+                    #end
+                    components.remove(xid);
+                    comp.destroy();
+                }
+            }
+            componentsToCheck.clear();
+        }
+
+    }
+
+    function collectVNodeComponents(vnode:VNode, usedComponents:Map<Xid,ReactiveComponent>):Void {
+
+        if (vnode != null) {
+            final component = vnode.reactiveComponent;
+            if (component != null) {
+                usedComponents.set(component.xid, component);
+                final compChildren = component.children;
+                if (compChildren != null) {
+                    for (j in 0...compChildren.length) {
+                        final compChild = compChildren[j];
+                        collectVNodeComponents(compChild, usedComponents);
+                    }
+                }
+            }
+            final children = vnode.children;
+            if (children != null) {
+                for (i in 0...children.length) {
+                    final child = children[i];
+                    collectVNodeComponents(child, usedComponents);
+                }
+            }
+        }
 
     }
 

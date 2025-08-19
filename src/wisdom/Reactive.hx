@@ -42,6 +42,8 @@ class Reactive {
 
         reactiveContext.autorun = new Autorun(() -> {
 
+            reactiveContext.beginReaction();
+
             var autorunPrevBaseXid = Wisdom.baseXid;
             Wisdom.baseXid = null;
 
@@ -56,6 +58,8 @@ class Reactive {
             Wisdom.baseXid = autorunPrevBaseXid;
             Wisdom.renderComponent = autorunPrevRenderComponent;
             Reactive.currentReactiveContext = autorunPrevReactiveContext;
+
+            reactiveContext.endReaction();
 
         },
         () -> {

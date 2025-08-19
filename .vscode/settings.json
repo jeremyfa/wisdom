@@ -9,6 +9,7 @@
     "haxe.configurations": [
         ["build-html.hxml", "-D", "completion"]
     ],
+    "haxe.enableCompilationServer": false,
     "liveServer.settings.root": "./html",
     "liveServer.settings.port": 5502
 }
