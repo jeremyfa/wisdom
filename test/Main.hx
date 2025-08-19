@@ -88,9 +88,10 @@ class Main implements X #if tracker implements Observable #end {
 
     #end
 
+    static var _main:Main = null;
     public static function main() {
 
-        static final _main = new Main();
+        _main = new Main();
 
     }
 
@@ -169,6 +170,8 @@ class Main implements X #if tracker implements Observable #end {
 
         // Example without reactivity and tracker library
 
+        var score = Math.random() * 100;
+
         wisdom.patch(
             #if wisdom_html
             document.getElementById('container')
@@ -176,26 +179,46 @@ class Main implements X #if tracker implements Observable #end {
             null // TODO
             #end,
             '<>
-                <div class="align-left">
-
-                    <!-- hello -->
-
-                    <p style=${{ color: 'blue', fontWeight: 'bold' }}>All cities:</p>
-
-                    <foreach $cities ${(i:Int, city:String) -> '<>
-                        <key ${city.toLowerCase().replace(' ','-')} />
-
-                        <p key=${name+'-'+city} class="city-info">
-                            Hello $name, from $city!
-
-                            <p style=${{ fontWeight: 'bold', color: 'purple' }} if=${city == "Paris"}>Bonjour !</p>
-                            <p style=${{ fontWeight: 'bold', color: 'purple' }} if=${city == "New York"}>Hi!</p>
-                        </p>
-
-                    '} />
-
-                </div>
+			<div>
+				<if ${score >= 90}>
+					Grade: A
+				<elseif ${score >= 80}>
+					Grade: B
+				<elseif ${score >= 70}>
+					Grade: C
+				<else>
+					Grade: F
+				</if>
+			</div>
         ');
+
+        // wisdom.patch(
+        //     #if wisdom_html
+        //     document.getElementById('container')
+        //     #else
+        //     null // TODO
+        //     #end,
+        //     '<>
+        //         <div class="align-left">
+
+        //             <!-- hello -->
+
+        //             <p style=${{ color: 'blue', fontWeight: 'bold' }}>All cities:</p>
+
+        //             <foreach $cities ${(i:Int, city:String) -> '<>
+        //                 <key ${city.toLowerCase().replace(' ','-')} />
+
+        //                 <p key=${name+'-'+city} class="city-info">
+        //                     Hello $name, from $city!
+
+        //                     <p style=${{ fontWeight: 'bold', color: 'purple' }} if=${city == "Paris"}>Bonjour !</p>
+        //                     <p style=${{ fontWeight: 'bold', color: 'purple' }} if=${city == "New York"}>Hi!</p>
+        //                 </p>
+
+        //             '} />
+
+        //         </div>
+        // ');
 
         #end
 

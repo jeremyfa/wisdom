@@ -5,6 +5,8 @@
 -D wisdom_html
 #-D wisdom_print_vnode_haxe
 --library tracker
+-D tracker_web_storage
+-D tracker_web_immediate
 #-D wisdom_debug
 --debug
 extraParams.hxml
