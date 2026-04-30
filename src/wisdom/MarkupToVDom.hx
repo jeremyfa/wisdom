@@ -830,8 +830,14 @@ class MarkupToVDom {
                             if (ifConditions == null) ifConditions = [];
                             ifConditions.push('!(' + value + ')');
                         }
-                        else if (key.startsWith('on')) {
-                            final eventKey = key.substr(2);
+                        else if (!isComponent && key.startsWith('on')) {
+                            // On HTML elements, `onClick` and `onclick` should both work —
+                            // DOM event names are case-sensitive, and JSX convention is to
+                            // accept camelCase then lower-case for `addEventListener`.
+                            // Components do NOT take this branch: they fall through to
+                            // `propsOutput` below with the original key casing preserved,
+                            // so `<MyComponent onClose=...>` matches `@props var onClose`.
+                            final eventKey = key.substr(2).toLowerCase();
                             if (isOnTopLevel) {
                                 fail(-1, 'Cannot have both top level "on" attribute and separate "on*" attributes');
                             }

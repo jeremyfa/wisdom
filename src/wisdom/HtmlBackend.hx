@@ -233,7 +233,24 @@ class HtmlBackend extends Backend {
         #end
 
         final elmHtml:js.html.Element = cast elm;
+        final defaultValField:String = '_wisdom_def_' + name;
+        if (!Reflect.hasField(elmHtml, defaultValField)) {
+            Reflect.setField(elmHtml, defaultValField, js.Syntax.code('{0}.{1}', elmHtml, name));
+        }
         js.Syntax.code('{0}.{1} = {2}', elmHtml, name, value);
+
+    }
+
+    public function resetProp(elm:Element, name:String #if wisdom_debug , ?pos:haxe.PosInfos #end):Void {
+
+        #if wisdom_debug
+        haxe.Log.trace('resetProp($elm, $name)', pos);
+        #end
+
+        final elmHtml:js.html.Element = cast elm;
+        final defaultValField:String = '_wisdom_def_' + name;
+        final defVal:Any = Reflect.field(elmHtml, defaultValField);
+        js.Syntax.code('{0}.{1} = {2}', elmHtml, name, defVal);
 
     }
 
@@ -298,6 +315,25 @@ class HtmlBackend extends Backend {
         #end
 
         return VNode.vnode(xid, 'div', {}, [], null, null);
+
+    }
+
+    public function didAppendChildren(elm:Element #if wisdom_debug , ?pos:haxe.PosInfos #end):Void {
+
+        final html:js.html.Element = cast elm;
+        if (html.tagName == 'SELECT') {
+            // Re-assert selectedness on option children from their content
+            // attribute now that the <select> has its full option list.
+            // Setting option.selected before the option is parented to the
+            // select lets the browser's per-insertion "ask for a reset"
+            // algorithm leave stale selectedness behind; this final pass
+            // runs one more reset with the complete tree in place.
+            final options = (cast html:js.html.SelectElement).options;
+            for (i in 0...options.length) {
+                final opt:js.html.OptionElement = cast options[i];
+                opt.selected = opt.hasAttribute('selected');
+            }
+        }
 
     }
 

@@ -27,6 +27,10 @@ class PropsModule {
                 if (oldVal != null && (props == null || !props.exists(name) || props.get(name) == null) && wisdom.backend.isAttribute(vnode.sel, name)) {
                     wisdom.backend.removeAttribute(elm, name);
                 }
+
+                if (oldVal != null && (props == null || !props.exists(name))) {
+                    wisdom.backend.resetProp(elm, name);
+                }
             }
         }
         if (props != null) {

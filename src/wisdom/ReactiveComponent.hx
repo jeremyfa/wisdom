@@ -26,6 +26,8 @@ class ReactiveComponent implements Observable {
 
     @observe public var children:Array<VNode> = null;
 
+    var didCallInit:Bool = false;
+
     public function new(
         xid:Xid,
         comp:Any,
@@ -81,6 +83,13 @@ class ReactiveComponent implements Observable {
                 }
                 else {
                     @:privateAccess compInstance.update(xid, reactiveContext, data, children);
+                    if (!didCallInit) {
+                        didCallInit = true;
+                        final init = Reflect.field(compInstance, 'init');
+                        if (init != null && Reflect.isFunction(init)) {
+                            Reflect.callMethod(compInstance, init, @:privateAccess Wisdom.EMPTY_ARRAY);
+                        }
+                    }
                     renderedRaw =  @:privateAccess compInstance.render();
                 }
 
@@ -99,6 +108,7 @@ class ReactiveComponent implements Observable {
 
                 var renderedNode:VNode = renderedRaw;
                 renderedNode.reactiveComponent = this;
+                if (renderedNode.key == null) renderedNode.key = xid;
 
                 rendered = renderedNode;
             }
@@ -117,6 +127,13 @@ class ReactiveComponent implements Observable {
                 }
                 else {
                     @:privateAccess compInstance.update(xid, reactiveContext, data, children);
+                    if (!didCallInit) {
+                        didCallInit = true;
+                        final init = Reflect.field(compInstance, 'init');
+                        if (init != null && Reflect.isFunction(init)) {
+                            Reflect.callMethod(compInstance, init, @:privateAccess Wisdom.EMPTY_ARRAY);
+                        }
+                    }
                     renderedRaw =  @:privateAccess compInstance.render();
                 }
 
@@ -136,6 +153,7 @@ class ReactiveComponent implements Observable {
 
                 var renderedNode:VNode = renderedRaw;
                 renderedNode.reactiveComponent = this;
+                if (renderedNode.key == null) renderedNode.key = xid;
 
                 rendered = reactiveContext.patch(
                     _prevRendered,

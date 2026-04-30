@@ -86,7 +86,7 @@ class HtmlAttributes {
         "object" => DIMS | MEDIA | FORM,
         "ol" => NONE,
         "optgroup" => FORM,
-        "option" => FORM,
+        "option" => FORM | INTERACT,
         "output" => FORM,
         "p" => HALIGN,
         "picture" => NONE,

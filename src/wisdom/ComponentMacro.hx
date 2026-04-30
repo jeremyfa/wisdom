@@ -143,14 +143,18 @@ class ComponentMacro {
                     if (!usedPropNames.exists(name)) {
                         usedPropNames.set(name, true);
 
-                        // Didn't process that prop, add assign expr
+                        // Didn't process that prop, add assign expr.
+                        // For ordinary @props fields we guard the setter on
+                        // `data.props.exists(name)` so an omitted prop in the
+                        // parent's JSX leaves the field at its Haxe-declared
+                        // default instead of clobbering it with `undefined`.
                         var assignExpr:Expr = switch (name) {
                             case 'children':
                                 null;
                             case 'props' | 'attrs' | 'classes' | 'style' | 'on':
                                 macro @:pos(updateField.pos) this.$name = this.data.$name;
                             case _:
-                                macro @:pos(updateField.pos) this.$name = this.data.props.get($v{name});
+                                macro @:pos(updateField.pos) if (this.data.props.exists($v{name})) this.$name = this.data.props.get($v{name});
                         }
 
                         if (assignExpr != null) {

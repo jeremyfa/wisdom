@@ -32,19 +32,26 @@ class XMacro {
 
             switch field.kind {
                 case FVar(t, e):
+                    #if !(completion || display)
                     if (e != null)
                         field.kind = FVar(t, processInlineMarkup(e));
+                    #end
 
                 case FProp(get, set, t, e):
-                    if (e != null)
+                    #if !(completion || display)
+                    if (e != null) {
                         field.kind = FProp(get, set, t, processInlineMarkup(e));
+                    }
+                    #end
 
                 case FFun(f):
                     var stateFields:Map<String,FunctionArg> = null;
                     if (hasXMeta(field.meta)) {
                         stateFields = transformWisdomComponent(field);
                     }
+                    #if !(completion || display)
                     f.expr = processInlineMarkup(f.expr);
+                    #end
 
                     #if !(completion || display)
                     if (stateFields != null) {
@@ -368,16 +375,16 @@ class XMacro {
         }
 
         return ExprTools.map(e, e -> {
-            try {
+            //try {
                 return processInlineMarkup(e, consumed);
-            }
-            catch (err:Any) {
-                // Why is this happening when using haxe completion server?
-                trace('Exception of type: ' + Type.getClass(err));
-                if (Std.string(err) != 'Stack overflow') {
-                    throw err;
-                }
-            }
+            // }
+            // catch (err:Any) {
+            //     // Why is this happening when using haxe completion server?
+            //     trace('Exception of type: ' + Type.getClass(err));
+            //     if (Std.string(err) != 'Stack overflow') {
+            //         throw err;
+            //     }
+            // }
             return e;
         });
 

@@ -227,6 +227,7 @@ class Wisdom implements X {
                     }
                 }
             }
+            backend.didAppendChildren(elm);
             if (hook != null) {
                 final create = hook.create;
                 if (create != null)
@@ -745,6 +746,10 @@ class Wisdom implements X {
             final _comp = (xid:Xid, ctx:ReactiveContext, data:VNodeData, children:Array<VNode>) -> {
                 var instance = Type.createInstance(comp, EMPTY_ARRAY);
                 instance.update(xid, ctx, data, children);
+                final init = Reflect.field(instance, 'init');
+                if (init != null && Reflect.isFunction(init)) {
+                    Reflect.callMethod(instance, init, EMPTY_ARRAY);
+                }
                 var result = instance.render();
                 instance.destroy();
                 instance = null;
