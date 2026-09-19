@@ -9,13 +9,40 @@ class HtmlBackend extends Backend {
 
     public function new() {}
 
+    /**
+     * Element properties that setProp() is allowed to write.
+     *
+     * Everything else in a vnode's `props` reaches the element through its
+     * attribute (see PropsModule), which is what most attributes need anyway.
+     * The properties listed here are the ones for which the attribute is not
+     * enough: either it only carries the default state (`value`, `checked`,
+     * `selected`, `muted`), or there is no attribute at all (`indeterminate`,
+     * `scrollTop`, ...). Extend it if your markup drives other live
+     * properties, custom element properties for instance.
+     */
+    public static var validProps:Map<String, Bool> = [
+        // The attribute only holds the default state, the property the live one.
+        'value' => true, 'checked' => true, 'selected' => true, 'muted' => true,
+        // No attribute counterpart.
+        'indeterminate' => true, 'selectedIndex' => true,
+        'scrollTop' => true, 'scrollLeft' => true,
+        'srcObject' => true, 'currentTime' => true, 'volume' => true, 'playbackRate' => true,
+        'defaultValue' => true, 'defaultChecked' => true,
+        'valueAsNumber' => true, 'valueAsDate' => true
+    ];
+
     public function createElement(tagName:String, ?options:CreateElementOptions #if wisdom_debug , ?pos:haxe.PosInfos #end):Element {
 
         #if wisdom_debug
         haxe.Log.trace('createElement($tagName, $options)', pos);
         #end
 
-        return cast document.createElement(tagName, cast options);
+        // Only pass options when there is something in them: `{is: null}`
+        // gets coerced to the string "null" by WebIDL and stamps an `is="null"`
+        // attribute on every element.
+        return cast (options != null
+            ? document.createElement(tagName, cast options)
+            : document.createElement(tagName));
 
     }
 
@@ -25,7 +52,9 @@ class HtmlBackend extends Backend {
         haxe.Log.trace('createElementNS($namespaceUri, $tagName, $options)', pos);
         #end
 
-        return cast document.createElementNS(namespaceUri, qualifiedName, cast options);
+        return cast (options != null
+            ? document.createElementNS(namespaceUri, qualifiedName, cast options)
+            : document.createElementNS(namespaceUri, qualifiedName));
 
     }
 
@@ -233,11 +262,21 @@ class HtmlBackend extends Backend {
         #end
 
         final elmHtml:js.html.Element = cast elm;
+
+        // Only the listed live properties are written as properties. Anything
+        // else is served by the attribute path in PropsModule, which also
+        // keeps read-only accessors such as `svg.width` or `input.list` from
+        // ever being assigned (that throws in strict mode).
+        if (!isValidProp(name)) return;
+
         final defaultValField:String = '_wisdom_def_' + name;
         if (!Reflect.hasField(elmHtml, defaultValField)) {
-            Reflect.setField(elmHtml, defaultValField, js.Syntax.code('{0}.{1}', elmHtml, name));
+            Reflect.setField(elmHtml, defaultValField, getProp(elm, name));
         }
-        js.Syntax.code('{0}.{1} = {2}', elmHtml, name, value);
+        // Bracket access, not `{0}.{1}`: a `{N}` placeholder injects the given
+        // expression as-is, so the dot form would compile to a literal `.name`
+        // property access instead of a dynamic one.
+        js.Syntax.code('{0}[{1}] = {2}', elmHtml, name, value);
 
     }
 
@@ -249,8 +288,10 @@ class HtmlBackend extends Backend {
 
         final elmHtml:js.html.Element = cast elm;
         final defaultValField:String = '_wisdom_def_' + name;
+        // Nothing to restore if setProp() never wrote this property.
+        if (!Reflect.hasField(elmHtml, defaultValField)) return;
         final defVal:Any = Reflect.field(elmHtml, defaultValField);
-        js.Syntax.code('{0}.{1} = {2}', elmHtml, name, defVal);
+        js.Syntax.code('{0}[{1}] = {2}', elmHtml, name, defVal);
 
     }
 
@@ -274,15 +315,41 @@ class HtmlBackend extends Backend {
 
     public function vnodeDataToCreateElementOptions(data:VNodeData):CreateElementOptions {
 
-        return cast {
-            'is': data.isa
-        };
+        // `null` (not `{is: null}`) when there is no custom element name, see
+        // the note in createElement().
+        final isa = data?.isa;
+        return isa != null ? cast { 'is': isa } : null;
 
     }
 
     public function isAttribute(sel:String, name:String):Bool {
 
         return HtmlAttributes.isValidAttribute(sel, name) || SvgAttributes.isValidAttribute(sel, name);
+
+    }
+
+    /**
+     * Whether `name` is one of the element properties setProp() may write,
+     * see `validProps`. Deliberately a fixed list rather than DOM
+     * introspection: deterministic, browser-independent, and it only writes
+     * the properties that actually need to be properties.
+     */
+    public function isValidProp(name:String):Bool {
+
+        return validProps.exists(name);
+
+    }
+
+    /**
+     * Reciprocal of setProp(): the property when it is a valid one, otherwise
+     * the attribute of the same name, which is where PropsModule put the value.
+     */
+    public function getProp(elm:Element, name:String):Any {
+
+        final elmHtml:js.html.Element = cast elm;
+        return isValidProp(name)
+            ? js.Syntax.field(elmHtml, name)
+            : elmHtml.getAttribute(name);
 
     }
 
