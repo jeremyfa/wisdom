@@ -496,7 +496,9 @@ class MarkupToVDom {
                     fail(i + iOffset, "Duplicate attribute: '" + attr + "'");
                 }
 
-                if (RE_ATTR.matched(2) == null || RE_ATTR.matched(2).trim() == '') {
+                final valueless = (RE_ATTR.matched(2) == null || RE_ATTR.matched(2).trim() == '');
+                // Only `unmanaged` may be written without a value (`<div unmanaged>`), meaning true.
+                if (valueless && attr != 'unmanaged') {
                     fail(i + iOffset, "Invalid attribute '" + attr + "'");
                 }
 
@@ -504,8 +506,11 @@ class MarkupToVDom {
 
                 i += RE_ATTR.matched(0).length;
 
-                var assignStart = RE_ATTR.matched(3);
-                if (assignStart == '"') {
+                var assignStart = valueless ? null : RE_ATTR.matched(3);
+                if (valueless) {
+                    attrValues.push('true');
+                }
+                else if (assignStart == '"') {
                     i--;
                     attrValues.push(parseAttrStrValue());
                 }
@@ -763,6 +768,10 @@ class MarkupToVDom {
                 var keyIndex = attrKeys != null ? attrKeys.indexOf('key') : -1;
                 var xidExpr = (keyIndex != -1 ? attrValues[keyIndex] : Std.string(nodes.length));
 
+                if (tag == 'portal' && (attrKeys == null || !attrKeys.contains('into'))) {
+                    fail(i + iOffset, "<portal> requires an `into` attribute");
+                }
+
                 var realTag = getRealTag(tag);
                 var shortComponentPath = if (componentPaths.exists(realTag)) {
                     componentPaths.get(realTag);
@@ -809,6 +818,20 @@ class MarkupToVDom {
                         final key = attrKeys[n];
                         final value = attrValues[n];
                         var topLevelKey = getTopLevelKey(key);
+                        if (tag == 'portal') {
+                            if (key == 'into') {
+                                topLevelKey = 'portal';
+                            }
+                            else if (key == 'key') {
+                                // Consumed by the xid above; never forwarded to props:
+                                // PropsModule must not see anything on a portal, whose
+                                // elm is a comment node.
+                                continue;
+                            }
+                            else if (key != 'if' && key != 'unless') {
+                                fail(-1, '<portal> only accepts the attributes into, key, if and unless (got "' + key + '")');
+                            }
+                        }
                         if (topLevelKey != null) {
                             if (!outputEmpty) {
                                 output.addChar(','.code);
@@ -1107,6 +1130,10 @@ class MarkupToVDom {
 
     function getTopLevelKey(key:String):String {
 
+        if (key == 'ref')
+            return 'ref';
+        if (key == 'unmanaged')
+            return 'unmanaged';
         if (key == 'style')
             return 'style';
         if (key == 'class' || key == 'className' || key == 'classes')
