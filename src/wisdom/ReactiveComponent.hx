@@ -89,6 +89,8 @@ class ReactiveComponent implements Observable {
 
                 // Rendering from parent node or first render
                 final renderChildren = freshChildren(children);
+                final _prevRenderXids = Reactive.currentRenderXids;
+                Reactive.currentRenderXids = new Map();
                 var renderedRaw = null;
                 if (compFunc != null) {
                     renderedRaw = compFunc(xid, reactiveContext, data, renderChildren);
@@ -104,6 +106,8 @@ class ReactiveComponent implements Observable {
                     }
                     renderedRaw =  @:privateAccess compInstance.render();
                 }
+
+                Reactive.currentRenderXids = _prevRenderXids;
 
                 // Restore base xid
                 Wisdom.baseXid = _prevBaseXid;
@@ -134,6 +138,8 @@ class ReactiveComponent implements Observable {
                 final _prevRendered = rendered;
 
                 final renderChildren = freshChildren(children);
+                final _prevRenderXids = Reactive.currentRenderXids;
+                Reactive.currentRenderXids = new Map();
                 var renderedRaw = null;
                 if (compFunc != null) {
                     renderedRaw = compFunc(xid, reactiveContext, data, renderChildren);
@@ -150,6 +156,7 @@ class ReactiveComponent implements Observable {
                     renderedRaw =  @:privateAccess compInstance.render();
                 }
 
+                Reactive.currentRenderXids = _prevRenderXids;
                 Wisdom.baseXid = _prevBaseXid;
                 Wisdom.renderComponent = _prevRenderComponent;
                 Reactive.currentReactiveContext = _prevReactiveContext;

@@ -20,6 +20,14 @@ class Reactive {
     @:allow(wisdom.ReactiveComponent)
     static var currentReactiveContext:ReactiveContext = null;
 
+    /**
+     * Xids of the components requested by the render() call in progress. Two
+     * requests for one xid within a single render mean two nodes claim the
+     * same identity, which silently merges them: better to say so.
+     */
+    @:allow(wisdom.ReactiveComponent)
+    static var currentRenderXids:Map<Xid,Bool> = null;
+
     public static function reactive(wisdom:Wisdom, container:Any, render:()-> #if completion Any #else VNode #end):ReactiveContext {
 
         if (renderReactiveComponentDyn == null) {
@@ -53,7 +61,12 @@ class Reactive {
             var autorunPrevReactiveContext = Reactive.currentReactiveContext;
             Reactive.currentReactiveContext = reactiveContext;
 
+            final autorunPrevRenderXids = Reactive.currentRenderXids;
+            Reactive.currentRenderXids = new Map();
+
             renderedAny = render();
+
+            Reactive.currentRenderXids = autorunPrevRenderXids;
 
             Wisdom.baseXid = autorunPrevBaseXid;
             Wisdom.renderComponent = autorunPrevRenderComponent;
@@ -84,6 +97,19 @@ class Reactive {
     }
 
     static function renderReactiveComponent(comp:Any, xid:Xid, data:VNodeData, children:Array<VNode>):Any {
+
+        final seen = Reactive.currentRenderXids;
+        if (seen != null) {
+            if (seen.exists(xid)) {
+                final message = 'Two components share the xid "' + xid + '" in the same render: give one of them a key';
+                #if debug
+                throw message;
+                #else
+                trace('[wisdom] ' + message);
+                #end
+            }
+            seen.set(xid, true);
+        }
 
         var reactiveComponent = Reactive.currentReactiveContext.components.get(xid);
 
