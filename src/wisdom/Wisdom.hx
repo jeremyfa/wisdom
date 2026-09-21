@@ -136,7 +136,11 @@ class Wisdom implements X {
             ? (vnode1.text is String && vnode2.text is String) || (Type.getClass(vnode1.text) == Type.getClass(vnode2.text)) // TODO not sure about that
             : true;
 
-        return isSameSel && isSameKey && isSameIs && isSameTextOrFragment;
+        // Flipping `unmanaged` re-creates the element: Wisdom can neither adopt
+        // nor clear an inside it does not own.
+        final isSameUnmanaged = (vnode1.data?.unmanaged == true) == (vnode2.data?.unmanaged == true);
+
+        return isSameSel && isSameKey && isSameIs && isSameTextOrFragment && isSameUnmanaged;
 
     }
 
@@ -211,6 +215,9 @@ class Wisdom implements X {
             if (hash < dot) backend.setAttribute(elm, "id", sel.substring(hash + 1, dot));
             if (dotIdx > 0)
                 backend.setAttribute(elm, "class", sel.substring(dot + 1).replace(".", " "));
+            if (data != null && data.unmanaged && ((Is.array(children) && children.length > 0) || (vnode.text != null && vnode.text.length > 0))) {
+                throw 'An unmanaged element cannot have children or text (sel: ' + sel + ')';
+            }
             for (i in 0...cbs.create.length) cbs.create[i](this, EMPTY_NODE, vnode);
             if (
                 Is.primitive(vnode.text) &&
@@ -471,28 +478,33 @@ class Wisdom implements X {
             if (update != null)
                 update(this, oldVnode, vnode);
         }
-        final oldCh:Array<VNode> = cast oldVnode.children;
-        final ch:Array<VNode> = cast vnode.children;
-        if (vnode.text == null) {
-            if (oldCh != null && ch != null) {
-                if (oldCh != ch) updateChildren(elm, oldCh, ch, insertedVnodeQueue);
+        // An unmanaged element keeps whatever a third party put inside it:
+        // the element itself was updated above, its children are not ours.
+        // sameVnode() guarantees oldVnode carries the same flag.
+        if (!(vnode.data?.unmanaged == true)) {
+            final oldCh:Array<VNode> = cast oldVnode.children;
+            final ch:Array<VNode> = cast vnode.children;
+            if (vnode.text == null) {
+                if (oldCh != null && ch != null) {
+                    if (oldCh != ch) updateChildren(elm, oldCh, ch, insertedVnodeQueue);
+                }
+                else if (ch != null) {
+                    if (oldVnode.text != null) backend.setTextContent(elm, "");
+                    addVnodes(elm, null, ch, 0, ch.length - 1, insertedVnodeQueue);
+                }
+                else if (oldCh != null) {
+                    removeVnodes(elm, oldCh, 0, oldCh.length - 1);
+                }
+                else if (oldVnode.text != null) {
+                    backend.setTextContent(elm, "");
+                }
             }
-            else if (ch != null) {
-                if (oldVnode.text != null) backend.setTextContent(elm, "");
-                addVnodes(elm, null, ch, 0, ch.length - 1, insertedVnodeQueue);
+            else if (oldVnode.text != vnode.text) {
+                if (oldCh != null) {
+                    removeVnodes(elm, oldCh, 0, oldCh.length - 1);
+                }
+                backend.setTextContent(elm, vnode.text);
             }
-            else if (oldCh != null) {
-                removeVnodes(elm, oldCh, 0, oldCh.length - 1);
-            }
-            else if (oldVnode.text != null) {
-                backend.setTextContent(elm, "");
-            }
-        }
-        else if (oldVnode.text != vnode.text) {
-            if (oldCh != null) {
-                removeVnodes(elm, oldCh, 0, oldCh.length - 1);
-            }
-            backend.setTextContent(elm, vnode.text);
         }
         final postpatch = hook?.postpatch;
         if (postpatch != null)
