@@ -745,8 +745,10 @@ class Wisdom implements X {
 
     public static function iStr(index:Int):String {
 
-        var key = currentIteratorKeys[index];
-        return key ?? '#'+currentIterator[index];
+        // Same prefixes as in MarkupToVDom: a <key> can only coincide with
+        // another <key>, never with the positional `#index` of an iteration.
+        final key = currentIteratorKeys[index];
+        return key != null ? '@' + key : '#' + currentIterator[index];
 
     }
 

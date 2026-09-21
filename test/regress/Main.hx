@@ -375,6 +375,7 @@ class Main implements X {
         case18_branchesAreDistinct();
         case19_switchCasesAreDistinct();
         case20_duplicateXidIsReported();
+        case21_userKeyNeverMatchesAPositionalIndex();
 
         runSteps();
 
@@ -1219,6 +1220,48 @@ class Main implements X {
         then(() -> {
             haxe.Log.trace = prevTrace;
             check('collision reported', messages.filter(m -> m.indexOf('share the xid') != -1).length >= 1, messages);
+        });
+        then(finishCase);
+
+    }
+
+    /** A numeric key equal to a sibling's positional index, in markup and in a foreach. */
+    static function case21_userKeyNeverMatchesAPositionalIndex() {
+
+        then(() -> start('21 user key never matches a positional index', () -> '<>
+            <div class="root">
+                <Counter label="first" />
+                <Counter label="second" />
+                <Counter key=1 label="keyed-one" />
+                <Counter key=2 label="keyed-two" />
+                <foreach ${['#0', '#1']} ${(i:Int, k:String) -> '<>
+                    <key $k />
+                    <Counter label=${'keyed' + k} />
+                '} />
+                <foreach ${['p', 'q']} ${(i:Int, k:String) -> '<>
+                    <Counter label=${'positional-' + k} />
+                '} />
+            </div>
+        '));
+        then(() -> {
+            check('eight counters', count('.counter') == 8, count('.counter'));
+            final labels = ['first', 'second', 'keyed-one', 'keyed-two', 'keyed#0', 'keyed#1', 'positional-p', 'positional-q'];
+            final xids = new Map<String,Bool>();
+            var missing = [];
+            var duplicates = [];
+            for (label in labels) {
+                final c = Counter.byLabel.get(label);
+                if (c == null) { missing.push(label); continue; }
+                if (xids.exists(c.xid)) duplicates.push(label + ' = ' + c.xid);
+                xids.set(c.xid, true);
+            }
+            check('every instance registered', missing.length == 0, missing);
+            check('eight distinct xids', duplicates.length == 0, duplicates);
+            Counter.byLabel.get('keyed-two').count = 4;
+        });
+        then(() -> {
+            check('keyed state isolated', text('.counter[data-label="keyed-two"]') == 'Count: 4', text('.counter[data-label="keyed-two"]'));
+            check('positional sibling untouched', text('.counter[data-label="second"]') == 'Count: 0', text('.counter[data-label="second"]'));
         });
         then(finishCase);
 

@@ -805,7 +805,9 @@ class MarkupToVDom {
             else if ((c.charCodeAt(0) == '/'.code && input.charCodeAt(i+1) == '>'.code) || c.charCodeAt(0) == '>'.code) {
 
                 var keyIndex = attrKeys != null ? attrKeys.indexOf('key') : -1;
-                var xidExpr = (keyIndex != -1 ? attrValues[keyIndex] : Std.string(nodes.length));
+                // A user key is prefixed so that it can only ever coincide with
+                // another user key, never with a sibling's positional index.
+                var xidExpr = (keyIndex != -1 ? '"@"+(' + attrValues[keyIndex] + ')' : Std.string(nodes.length));
 
                 if (tag == 'portal' && (attrKeys == null || !attrKeys.contains('into'))) {
                     fail(i + iOffset, "<portal> requires an `into` attribute");
