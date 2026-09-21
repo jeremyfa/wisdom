@@ -267,18 +267,25 @@ class ReactiveComponent implements Observable {
 
     }
 
+    /**
+     * `root` is the vnode that was just created for this component. It is
+     * passed in rather than read from `rendered`: a self re-render assigns
+     * `rendered` only after the patch (and this mount) returned.
+     */
     @:allow(wisdom.ReactiveContext)
-    function mount():Void {
+    function mount(root:VNode):Void {
+
+        if (root == null || root.elm == null) return;
 
         // Innermost first: the inner component is conceptually the child.
         final list = chain();
         var i = list.length - 1;
         while (i >= 0) {
             final rc = list[i];
-            if (!rc.mounted && rc.rendered != null && rc.rendered.elm != null) {
+            if (!rc.mounted) {
                 rc.mounted = true;
                 if (rc.compInstance != null) {
-                    @:privateAccess rc.compInstance.didMount(rc.rendered.elm);
+                    @:privateAccess rc.compInstance.didMount(root.elm);
                 }
             }
             i--;

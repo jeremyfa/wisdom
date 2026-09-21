@@ -167,8 +167,8 @@ class ReactiveContext {
         for (i in 0...list.length) {
             final vnode = list[i];
             final rc = vnode.reactiveComponent;
-            if (rc != null && components.get(rc.xid) == rc && rc.rendered == vnode) {
-                rc.mount();
+            if (rc != null && components.get(rc.xid) == rc) {
+                rc.mount(vnode);
             }
         }
 
@@ -267,6 +267,16 @@ class ReactiveContext {
         if (autorun != null) {
             autorun.destroy();
             autorun = null;
+        }
+
+        // Unmount outermost first: a wrapper takes its inner chain with it,
+        // whatever the order of the map. Only chain heads start a walk.
+        final inners = new Map<Xid,Bool>();
+        for (reactiveComponent in components) {
+            if (reactiveComponent.inner != null) inners.set(reactiveComponent.inner.xid, true);
+        }
+        for (reactiveComponent in components) {
+            if (!inners.exists(reactiveComponent.xid)) reactiveComponent.unmount();
         }
 
         for (reactiveComponent in components) {
