@@ -30,16 +30,35 @@ class ReactiveContext {
 
     var componentsToCheck:Map<Xid,ReactiveComponent> = new Map();
 
+    /** Component roots created by the current patch, mounted once it is over. */
+    var pendingMounts:Array<VNode> = [];
+
     public function new(wisdom:Wisdom, container:Any) {
 
         this.wisdom = wisdom;
         this.container = container;
 
         hooks = {
+            create: createHook,
             update: updateHook,
             remove: removeHook,
             destroy: destroyHook
         };
+
+    }
+
+    /**
+     * A component root was just created (createElm). It is not attached yet:
+     * mounting happens in flushMounts(), once the patch is over and this
+     * context's bookkeeping (container, replaceVNode) is consistent, so that
+     * user code in didMount() may read the tree or write observables safely.
+     */
+    function createHook(wisdom:Wisdom, emptyVNode:VNode, vNode:VNode) {
+
+        final rc = vNode.reactiveComponent;
+        if (rc != null && components.get(rc.xid) == rc) {
+            pendingMounts.push(vNode);
+        }
 
     }
 
@@ -126,6 +145,41 @@ class ReactiveContext {
 
         checkRemovedNodeComponent(node);
 
+        final rc = node?.reactiveComponent;
+        if (rc != null && components.get(rc.xid) == rc) {
+            // Created and removed within the same patch: never mounted,
+            // nothing to mount.
+            while (pendingMounts.remove(node)) {}
+            // The element is still attached here (destroy runs before the DOM
+            // removal). If the component survives because its root is
+            // re-created elsewhere in this patch, createHook has queued or will
+            // queue the new root and didMount() follows.
+            rc.unmount();
+        }
+
+    }
+
+    function flushMounts():Void {
+
+        if (pendingMounts.length == 0) return;
+        final list = pendingMounts;
+        pendingMounts = [];
+        for (i in 0...list.length) {
+            final vnode = list[i];
+            final rc = vnode.reactiveComponent;
+            if (rc != null && components.get(rc.xid) == rc && rc.rendered == vnode) {
+                rc.mount();
+            }
+        }
+
+    }
+
+    /** Patch of the whole tree by Reactive.reactive(): store the result, then mount. */
+    public function patchRoot(renderedRaw:Any):Void {
+
+        container = wisdom.patch(container, renderedRaw);
+        flushMounts();
+
     }
 
     /**
@@ -161,6 +215,8 @@ class ReactiveContext {
                 replaceVNode(container, prevRendered, rendered);
             }
         }
+
+        flushMounts();
 
         return rendered;
 
@@ -217,6 +273,7 @@ class ReactiveContext {
             reactiveComponent.destroy();
         }
         components = null;
+        pendingMounts = [];
 
         container = null;
 

@@ -63,10 +63,7 @@ class Reactive {
 
         },
         () -> {
-            reactiveContext.container = wisdom.patch(
-                reactiveContext.container,
-                renderedAny
-            );
+            reactiveContext.patchRoot(renderedAny);
         });
 
         if (renderedAny != null) {

@@ -22,6 +22,17 @@ class ReactiveComponent implements Observable {
 
     public var renderComponent(default, null):RenderComponent = null;
 
+    /** True between didMount() and willUnmount() of the component instance. */
+    public var mounted(default, null):Bool = false;
+
+    /**
+     * Wrapper-override pattern (see ReactiveContext.updateHook): when this
+     * component's render() returns another component's root, that inner
+     * component still owns the same physical vnode but the vnode only points
+     * at us. Kept here so that mount and unmount reach it too.
+     */
+    public var inner(default, null):ReactiveComponent = null;
+
     @observe public var data:VNodeData = null;
 
     @observe public var children:Array<VNode> = null;
@@ -108,7 +119,7 @@ class ReactiveComponent implements Observable {
                 }
 
                 var renderedNode:VNode = renderedRaw;
-                renderedNode.reactiveComponent = this;
+                claimRoot(renderedNode);
                 if (renderedNode.key == null) renderedNode.key = xid;
 
                 rendered = renderedNode;
@@ -154,7 +165,7 @@ class ReactiveComponent implements Observable {
                 }
 
                 var renderedNode:VNode = renderedRaw;
-                renderedNode.reactiveComponent = this;
+                claimRoot(renderedNode);
                 if (renderedNode.key == null) renderedNode.key = xid;
 
                 rendered = reactiveContext.patch(
@@ -224,6 +235,72 @@ class ReactiveComponent implements Observable {
 
     }
 
+    /**
+     * Takes ownership of the rendered root, remembering the component that
+     * owned it before us when there is one (wrapper-override pattern).
+     */
+    function claimRoot(renderedNode:VNode):Void {
+
+        final prevOwner = renderedNode.reactiveComponent;
+        if (prevOwner == null) {
+            inner = null;
+        }
+        else if (prevOwner != this) {
+            inner = prevOwner;
+        }
+        // else: the vnode is still ours from a previous render, keep `inner`.
+        renderedNode.reactiveComponent = this;
+
+    }
+
+    /** From this component to the innermost one sharing its root. */
+    function chain():Array<ReactiveComponent> {
+
+        final result = [];
+        var rc = this;
+        var guard = 0;
+        while (rc != null && guard++ < 64) {
+            result.push(rc);
+            rc = rc.inner;
+        }
+        return result;
+
+    }
+
+    @:allow(wisdom.ReactiveContext)
+    function mount():Void {
+
+        // Innermost first: the inner component is conceptually the child.
+        final list = chain();
+        var i = list.length - 1;
+        while (i >= 0) {
+            final rc = list[i];
+            if (!rc.mounted && rc.rendered != null && rc.rendered.elm != null) {
+                rc.mounted = true;
+                if (rc.compInstance != null) {
+                    @:privateAccess rc.compInstance.didMount(rc.rendered.elm);
+                }
+            }
+            i--;
+        }
+
+    }
+
+    @:allow(wisdom.ReactiveContext)
+    function unmount():Void {
+
+        // Outermost first.
+        for (rc in chain()) {
+            if (rc.mounted) {
+                rc.mounted = false;
+                if (rc.compInstance != null) {
+                    @:privateAccess rc.compInstance.willUnmount();
+                }
+            }
+        }
+
+    }
+
     public function update(data, children):Void {
 
         this.data = data;
@@ -236,6 +313,11 @@ class ReactiveComponent implements Observable {
     }
 
     public function destroy() {
+
+        // No DOM hook fires when a whole context goes away or when liveness
+        // decides a component is gone: make sure the instance still sees the
+        // unmount before it is destroyed.
+        unmount();
 
         if (autorun != null) {
             autorun.destroy();
