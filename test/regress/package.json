@@ -1,0 +1,8 @@
+{
+  "name": "wisdom-regress",
+  "private": true,
+  "description": "Headless regression tests for wisdom: real HtmlBackend on a jsdom document under node.",
+  "devDependencies": {
+    "jsdom": "30.1.0"
+  }
+}

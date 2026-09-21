@@ -2,3 +2,5 @@
 /html/app.js.map
 .DS_Store
 .haxelib
+/test/regress/node_modules
+/test/regress/out

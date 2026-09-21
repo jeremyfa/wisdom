@@ -441,6 +441,17 @@ Invalid:
     <p>root node 2</p>
 ```
 
+## Tests
+
+Regression tests run under node on a [jsdom](https://github.com/jsdom/jsdom) document, with the real `HtmlBackend` and modules. They live in `test/regress/`.
+
+```sh
+cd test/regress && npm install && cd ../..
+haxe build-test.hxml && node test/regress/run.mjs
+```
+
+Each check prints `PASS` or `FAIL`, and the process exits with a non-zero code if any check failed.
+
 # Credits
 
 This library has been ported, adapted to Haxe and extended by **Jérémy Faivre** from the work of **Simon Friis Vindum** who created the _very well designed_ [snabbdom](https://github.com/snabbdom/snabbdom) ⚡️ library.

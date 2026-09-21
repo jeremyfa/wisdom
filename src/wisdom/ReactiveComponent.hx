@@ -77,12 +77,13 @@ class ReactiveComponent implements Observable {
                 Wisdom.baseXid = xid;
 
                 // Rendering from parent node or first render
+                final renderChildren = freshChildren(children);
                 var renderedRaw = null;
                 if (compFunc != null) {
-                    renderedRaw = compFunc(xid, reactiveContext, data, children);
+                    renderedRaw = compFunc(xid, reactiveContext, data, renderChildren);
                 }
                 else {
-                    @:privateAccess compInstance.update(xid, reactiveContext, data, children);
+                    @:privateAccess compInstance.update(xid, reactiveContext, data, renderChildren);
                     if (!didCallInit) {
                         didCallInit = true;
                         final init = Reflect.field(compInstance, 'init');
@@ -121,12 +122,13 @@ class ReactiveComponent implements Observable {
 
                 final _prevRendered = rendered;
 
+                final renderChildren = freshChildren(children);
                 var renderedRaw = null;
                 if (compFunc != null) {
-                    renderedRaw = compFunc(xid, reactiveContext, data, children);
+                    renderedRaw = compFunc(xid, reactiveContext, data, renderChildren);
                 }
                 else {
-                    @:privateAccess compInstance.update(xid, reactiveContext, data, children);
+                    @:privateAccess compInstance.update(xid, reactiveContext, data, renderChildren);
                     if (!didCallInit) {
                         didCallInit = true;
                         final init = Reflect.field(compInstance, 'init');
@@ -164,6 +166,61 @@ class ReactiveComponent implements Observable {
             reactiveContext.endReaction();
 
         });
+
+    }
+
+    /**
+     * Fresh copies of the children handed by the parent, for one render.
+     *
+     * The patch algorithm mutates vnodes in place (`elm` above all), so the
+     * previous rendered tree and the new one must never share a vnode. When a
+     * component re-renders from its own state the parent has not rendered
+     * again, and `children` still holds the very objects sitting in the
+     * previous tree: emitting them as is corrupts the diff as soon as a
+     * sibling appears or disappears next to them. Two keyless `div`s get
+     * paired positionally, the shared vnode's `elm` is rewritten to the
+     * sibling's element, and the removal that follows takes the wrong node
+     * out of the DOM.
+     *
+     * Component roots are the one exception. They are shared by identity on
+     * purpose (see Reactive.renderReactiveComponent) and carry a unique key,
+     * so the diff always pairs them with themselves. For those we return the
+     * component's CURRENT root rather than the reference the parent captured,
+     * which is stale if the nested component re-rendered on its own since.
+     *
+     * `data` is shared, not copied: the modules never mutate it, and they
+     * short-circuit on identity, which makes patching unchanged content free.
+     */
+    static function freshChildren(children:Array<VNode>):Array<VNode> {
+
+        if (children == null) return null;
+        final result = [];
+        for (i in 0...children.length) {
+            result.push(fresh(children[i]));
+        }
+        return result;
+
+    }
+
+    static function fresh(vnode:VNode):VNode {
+
+        if (vnode == null) return null;
+
+        final component = vnode.reactiveComponent;
+        if (component != null) {
+            return component.rendered ?? vnode;
+        }
+
+        final copy = VNode.vnode(
+            vnode.xid,
+            vnode.sel,
+            vnode.data,
+            freshChildren(vnode.children),
+            vnode.text,
+            null
+        );
+        copy.key = vnode.key;
+        return copy;
 
     }
 

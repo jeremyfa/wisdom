@@ -1,0 +1,8 @@
+-cp src
+-cp test/regress
+--main Main
+--js test/regress/out/test.js
+-D wisdom_html
+--library tracker
+-D tracker_web_immediate
+extraParams.hxml
