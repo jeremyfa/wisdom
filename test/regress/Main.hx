@@ -3,6 +3,7 @@ package;
 import js.Browser.document;
 import js.html.Element;
 import tracker.Observable;
+import ui.Panel;
 import wisdom.Component;
 import wisdom.HtmlBackend;
 import wisdom.ReactiveContext;
@@ -36,6 +37,9 @@ class State implements Observable {
 
     /** Read by the root render: keyed list. */
     @observe public var items:Array<String> = ['a', 'b', 'c'];
+
+    /** Read by the root render of the lifecycle case: hides a component. */
+    @observe public var flag2:Bool = false;
 
 }
 
@@ -141,6 +145,197 @@ class TopBar extends Component {
 
 }
 
+/** Lifecycle log, shared by the lifecycle cases. */
+class Life extends Component {
+
+    public static var log:Array<String> = [];
+
+    @props var tag:String = 'life';
+
+    /** When true, the root selector follows `flag` so that a re-render re-creates the root. */
+    @props var swap:Bool = false;
+
+    function render() {
+        return (swap && Main.st.flag) ? '<><section class="life">$tag</section>' : '<><div class="life">$tag</div>';
+    }
+
+    override function didMount(elm:Any) {
+        final el:js.html.Element = elm;
+        log.push('mount:' + tag + ':' + el.tagName.toLowerCase() + ':' + (document.body.contains(el) ? 'attached' : 'detached'));
+    }
+
+    override function willUnmount() {
+        log.push('unmount:' + tag);
+    }
+
+    override function destroy() {
+        log.push('destroy:' + tag);
+        super.destroy();
+    }
+
+}
+
+/** Wrapper-override: renders only another component. */
+class LifeWrapper extends Component {
+
+    function render() '<>
+        <Life tag="inner" />
+    ';
+
+    override function didMount(elm:Any) {
+        Life.log.push('mount:wrapper');
+    }
+
+    override function willUnmount() {
+        Life.log.push('unmount:wrapper');
+    }
+
+}
+
+typedef DockHost = { id:String, element:Element };
+
+/**
+ * Stand-in for a docking library such as Golden Layout: it owns the DOM under
+ * `root`, creates one content element per panel, hands it to the app through
+ * onBind, moves items around on its own, and tears everything down on destroy.
+ */
+class FakeDock {
+
+    public var root:Element;
+
+    public var hosts:Map<String, Element> = new Map();
+
+    public var items:Map<String, Element> = new Map();
+
+    public var onBind:(id:String, host:Element)->Void = null;
+
+    public var onUnbind:(id:String)->Void = null;
+
+    public var destroyedCount:Int = 0;
+
+    public function new(root:Element) {
+        this.root = root;
+    }
+
+    public function load(ids:Array<String>) {
+        final stack = document.createDivElement();
+        stack.className = 'stack';
+        root.appendChild(stack);
+        for (id in ids) bind(stack, id);
+    }
+
+    function bind(stack:Element, id:String) {
+        final item = document.createDivElement();
+        item.className = 'item';
+        final host = document.createDivElement();
+        host.className = 'content';
+        item.appendChild(host);
+        stack.appendChild(item);
+        items.set(id, item);
+        hosts.set(id, host);
+        if (onBind != null) onBind(id, host);
+    }
+
+    /** Third-party DOM move: same host element, new place. */
+    public function moveToNewStack(id:String) {
+        final stack = document.createDivElement();
+        stack.className = 'stack';
+        root.appendChild(stack);
+        stack.appendChild(items.get(id));
+    }
+
+    /** Popout-like: the panel is unbound then bound again with a NEW host element. */
+    public function rebind(id:String) {
+        if (onUnbind != null) onUnbind(id);
+        items.get(id).remove();
+        bind(cast root.firstElementChild, id);
+    }
+
+    public function close(id:String) {
+        if (onUnbind != null) onUnbind(id);
+        items.get(id).remove();
+        items.remove(id);
+        hosts.remove(id);
+    }
+
+    /** Harsh teardown: clears the hosts themselves, like a library wiping its DOM. */
+    public function destroy() {
+        destroyedCount++;
+        for (id in [for (k in hosts.keys()) k]) {
+            if (onUnbind != null) onUnbind(id);
+            hosts.get(id).innerHTML = '';
+        }
+        while (root.firstChild != null) root.removeChild(root.firstChild);
+        hosts = new Map();
+        items = new Map();
+    }
+
+}
+
+/** The shape of a GoldenLayout component built on the new primitives. */
+class Dock extends Component {
+
+    public static var last:Dock = null;
+
+    public static var mounts:Int = 0;
+
+    public static var unmounts:Int = 0;
+
+    @props var panels:Array<String> = [];
+
+    @observe var hosts:Array<DockHost> = [];
+
+    public var dock:FakeDock = null;
+
+    var root:Element = null;
+
+    var unmounting:Bool = false;
+
+    function init() {
+        last = this;
+    }
+
+    function render() '<>
+        <div class="dock" data-tick=${Main.st.tick}>
+            <div class="dock-root" unmanaged ref=$setRoot />
+            <foreach $hosts ${(i:Int, host:DockHost) -> '<>
+                <key ${host.id} />
+                <portal into=${host.element}>${panel(host.id)}</portal>
+            '} />
+        </div>
+    ';
+
+    function setRoot(el:Any) {
+        root = el;
+    }
+
+    function panel(name:String):VNode {
+        if (children == null) return null;
+        for (c in children) {
+            final rc = c.reactiveComponent;
+            if (rc != null && rc.compInstance is Panel && (cast rc.compInstance:Panel).name == name) return c;
+        }
+        return null;
+    }
+
+    override function didMount(elm:Any) {
+        mounts++;
+        dock = new FakeDock(root);
+        // Reassign, never push: tracker observes the field, not the array.
+        dock.onBind = (id, el) -> hosts = hosts.filter(h -> h.id != id).concat([{ id: id, element: el }]);
+        dock.onUnbind = id -> { if (!unmounting) hosts = hosts.filter(h -> h.id != id); };
+        dock.load(panels);
+    }
+
+    override function willUnmount() {
+        unmounts++;
+        unmounting = true;
+        dock.destroy();
+        dock = null;
+    }
+
+}
+
 class Main implements X {
 
     public static var st:State;
@@ -169,6 +364,11 @@ class Main implements X {
         case8_componentWithoutAttributes();
         case9_nestedComponentSurvivesStructuralShift();
         case10_hiddenSlotDestroysItsComponents();
+        case11_unmanagedElementKeepsForeignChildren();
+        case12_portalRendersIntoHost();
+        case13_componentLifecycle();
+        case14_refFollowsTheElement();
+        case15_dockIntegration();
 
         runSteps();
 
@@ -522,6 +722,249 @@ class Main implements X {
 
     }
 
+    /** An element whose inside belongs to a third party survives re-renders of its attributes. */
+    static function case11_unmanagedElementKeepsForeignChildren() {
+
+        var um:Element = null;
+        then(() -> start('11 unmanaged element keeps foreign children', () -> '<>
+            <div class="root">
+                <div class=${'um ' + (st.flag ? 'on' : 'off')} unmanaged />
+            </div>
+        '));
+        then(() -> {
+            um = container.querySelector('.um');
+            check('unmanaged rendered', um != null, um);
+            final foreign = document.createElement('i');
+            foreign.className = 'foreign';
+            um.appendChild(foreign);
+        });
+        then(() -> st.flag = true);
+        then(() -> {
+            check('same element after re-render', container.querySelector('.um') == um, container.querySelector('.um') == um);
+            check('class updated', um.classList.contains('on') && !um.classList.contains('off'), um.className);
+            check('foreign child kept', um.querySelectorAll('.foreign').length == 1, um.querySelectorAll('.foreign').length);
+        });
+        then(finishCase);
+
+    }
+
+    /** Children of a portal live in the host, but stay Wisdom children: diffed, stateful, destroyed. */
+    static function case12_portalRendersIntoHost() {
+
+        final host = document.createDivElement();
+        host.className = 'host';
+        var xid:String = null;
+        then(() -> {
+            document.body.appendChild(host);
+            start('12 portal renders into a host element', () -> '<>
+                <div class="root">
+                    <if ${st.flag}>
+                        <portal into=$host>
+                            <div class="tp">${st.tick}</div>
+                            <Counter label="p" />
+                        </portal>
+                    </if>
+                </div>
+            ');
+        });
+        then(() -> st.flag = true);
+        then(() -> {
+            check('content in host', host.querySelectorAll('.tp').length == 1, host.querySelectorAll('.tp').length);
+            check('content not in container', container.querySelector('.tp') == null, container.querySelector('.tp'));
+            check('one placeholder comment', comments(container) == 1, comments(container));
+            check('counter in host', host.querySelector('.counter') != null, host.querySelector('.counter'));
+            xid = Counter.last.xid;
+        });
+        then(() -> Counter.last.count = 2);
+        then(() -> check('counter state applied', host.querySelector('.counter').textContent.trim() == 'Count: 2', host.querySelector('.counter').textContent));
+        then(() -> st.tick++);
+        then(() -> {
+            check('text updated in host', host.querySelector('.tp').textContent.trim() == '1', host.querySelector('.tp').textContent);
+            check('counter kept across parent re-render', host.querySelector('.counter').textContent.trim() == 'Count: 2', host.querySelector('.counter').textContent);
+            check('still one tp', host.querySelectorAll('.tp').length == 1, host.querySelectorAll('.tp').length);
+        });
+        then(() -> st.flag = false);
+        then(() -> {
+            check('host emptied', host.childNodes.length == 0, host.childNodes.length);
+            check('placeholder removed', comments(container) == 0, comments(container));
+            check('counter destroyed', @:privateAccess ctx.components.exists(xid) == false, @:privateAccess ctx.components.exists(xid));
+        });
+        then(() -> st.flag = true);
+        then(() -> {
+            check('re-created once', host.querySelectorAll('.tp').length == 1, host.querySelectorAll('.tp').length);
+            check('counter fresh', host.querySelector('.counter').textContent.trim() == 'Count: 0', host.querySelector('.counter').textContent);
+        });
+        then(() -> {
+            finishCase();
+            host.remove();
+        });
+
+    }
+
+    /** didMount / willUnmount / destroy ordering, including the wrapper-override pattern. */
+    static function case13_componentLifecycle() {
+
+        then(() -> {
+            Life.log = [];
+            start('13 component lifecycle', () -> '<>
+                <div class="root">
+                    <if ${!st.flag2}>
+                        <Life tag="a" swap=true />
+                    </if>
+                    <LifeWrapper />
+                </div>
+            ');
+        });
+        then(() -> {
+            check('a mounted attached', Life.log.indexOf('mount:a:div:attached') != -1, Life.log.join(' '));
+            final inner = Life.log.indexOf('mount:inner:div:attached');
+            final wrapper = Life.log.indexOf('mount:wrapper');
+            check('inner mounted before wrapper', inner != -1 && wrapper != -1 && inner < wrapper, Life.log.join(' '));
+            check('no unmount yet', Life.log.filter(l -> l.startsWith('unmount')).length == 0, Life.log.join(' '));
+            Life.log = [];
+        });
+        then(() -> st.flag = true);
+        then(() -> {
+            check('root re-created: unmount then mount', Life.log.join(',') == 'unmount:a,mount:a:section:attached', Life.log.join(','));
+            Life.log = [];
+        });
+        then(() -> st.flag2 = true);
+        then(() -> {
+            check('hidden: unmount then destroy', Life.log.join(',') == 'unmount:a,destroy:a', Life.log.join(','));
+            Life.log = [];
+        });
+        then(() -> {
+            finishCase();
+            final uw = Life.log.indexOf('unmount:wrapper');
+            final ui = Life.log.indexOf('unmount:inner');
+            check('wrapper unmounted on context destroy', uw != -1, Life.log.join(' '));
+            check('inner unmounted on context destroy', ui != -1, Life.log.join(' '));
+            check('wrapper unmounted before inner', uw != -1 && ui != -1 && uw < ui, Life.log.join(' '));
+            check('inner destroyed', Life.log.indexOf('destroy:inner') != -1, Life.log.join(' '));
+            check('no mount on destroy', Life.log.filter(l -> l.startsWith('mount')).length == 0, Life.log.join(' '));
+        });
+
+    }
+
+    static var refLog:Array<String> = [];
+
+    static function onRef(el:Any) {
+        refLog.push(el == null ? 'null' : (document.body.contains(el) ? 'attached' : 'detached'));
+    }
+
+    /** ref fires with the attached element on creation, with null on destruction, nothing in between. */
+    static function case14_refFollowsTheElement() {
+
+        then(() -> {
+            refLog = [];
+            start('14 ref follows the element', () -> '<>
+                <div class="root" data-tick=${st.tick}>
+                    <if ${st.flag}>
+                        <span class="r" ref=$onRef />
+                    </if>
+                </div>
+            ');
+        });
+        then(() -> check('nothing before creation', refLog.length == 0, refLog.join(',')));
+        then(() -> st.flag = true);
+        then(() -> check('attached on creation', refLog.join(',') == 'attached', refLog.join(',')));
+        then(() -> st.tick++);
+        then(() -> check('silent on re-render', refLog.join(',') == 'attached', refLog.join(',')));
+        then(() -> st.flag = false);
+        then(() -> check('null on destruction', refLog.join(',') == 'attached,null', refLog.join(',')));
+        then(finishCase);
+
+    }
+
+    /**
+     * The Golden Layout shape end to end against a fake docking library: panels
+     * rendered into hosts created by the library, moved, re-bound, closed, and
+     * the whole thing torn down while the library wipes its own DOM.
+     */
+    static function case15_dockIntegration() {
+
+        var counterXid:String = null;
+        var dockRef:FakeDock = null;
+        then(() -> {
+            Dock.mounts = 0;
+            Dock.unmounts = 0;
+            Panel.destroyedCount = 0;
+            start('15 dock integration', () -> '<>
+                <div class="root" data-tick=${st.tick}>
+                    <if ${st.flag}>
+                        <Dock panels=${['editor', 'console']}>
+                            <Panel name="editor"><Counter label="ed" /></Panel>
+                            <Panel name="console"><div class="con">Console</div></Panel>
+                        </Dock>
+                    </if>
+                </div>
+            ');
+        });
+        then(() -> st.flag = true);
+        then(() -> {
+            check('mounted once', Dock.mounts == 1, Dock.mounts);
+            final editorHost = Dock.last.dock.hosts.get('editor');
+            final consoleHost = Dock.last.dock.hosts.get('console');
+            check('editor panel in its host', editorHost.querySelector('.panel[data-panel=editor] .counter') != null, editorHost.innerHTML);
+            check('console panel in its host', consoleHost.querySelector('.panel[data-panel=console] .con') != null, consoleHost.innerHTML);
+            check('two panels', count('.panel') == 2, count('.panel'));
+            check('two placeholders', comments(container.querySelector('.dock')) == 2, comments(container.querySelector('.dock')));
+            counterXid = Counter.byLabel.get('ed').xid;
+            dockRef = Dock.last.dock;
+        });
+        then(() -> Counter.byLabel.get('ed').count = 3);
+        then(() -> check('counter updated in host', text('.counter') == 'Count: 3', text('.counter')));
+        then(() -> st.tick++);
+        then(() -> {
+            check('two panels after parent re-render', count('.panel') == 2, count('.panel'));
+            check('counter kept after parent re-render', text('.counter') == 'Count: 3', text('.counter'));
+            check('two placeholders after parent re-render', comments(container.querySelector('.dock')) == 2, comments(container.querySelector('.dock')));
+        });
+        then(() -> Dock.last.dock.moveToNewStack('editor'));
+        then(() -> Counter.byLabel.get('ed').count = 4);
+        then(() -> {
+            check('counter live after third-party move', text('.counter') == 'Count: 4', text('.counter'));
+            check('two panels after move', count('.panel') == 2, count('.panel'));
+        });
+        then(() -> Dock.last.dock.rebind('console'));
+        then(() -> {
+            check('console content once after rebind', count('.con') == 1, count('.con'));
+            check('console content in the new host', Dock.last.dock.hosts.get('console').querySelector('.con') != null, Dock.last.dock.hosts.get('console').innerHTML);
+            check('nothing destroyed by rebind', Panel.destroyedCount == 0, Panel.destroyedCount);
+        });
+        then(() -> Dock.last.dock.close('console'));
+        then(() -> {
+            check('console content gone', count('.con') == 0, count('.con'));
+            check('console panel destroyed', Panel.destroyedCount == 1, Panel.destroyedCount);
+            check('one panel left', count('.panel') == 1, count('.panel'));
+        });
+        then(() -> st.flag = false);
+        then(() -> {
+            check('unmounted once', Dock.unmounts == 1, Dock.unmounts);
+            check('fake dock destroyed', dockRef.destroyedCount == 1, dockRef.destroyedCount);
+            check('no panel left', count('.panel') == 0, count('.panel'));
+            check('counter destroyed', @:privateAccess ctx.components.exists(counterXid) == false, @:privateAccess ctx.components.exists(counterXid));
+            check('editor panel destroyed', Panel.destroyedCount == 2, Panel.destroyedCount);
+        });
+        then(() -> st.flag = true);
+        then(() -> {
+            check('mounted again', Dock.mounts == 2, Dock.mounts);
+            check('two panels again', count('.panel') == 2, count('.panel'));
+            check('fresh counter', text('.counter') == 'Count: 0', text('.counter'));
+        });
+        then(finishCase);
+
+    }
+
+    static function comments(el:Element):Int {
+        if (el == null) return -1;
+        var n = 0;
+        for (i in 0...el.childNodes.length) {
+            if (el.childNodes[i].nodeType == 8) n++;
+        }
+        return n;
+    }
+
     static function titles():String {
         return [for (el in container.querySelectorAll('.title')) (cast el:Element).textContent.trim()].join(',');
     }
@@ -559,6 +1002,13 @@ class Main implements X {
         steps.push(f);
     }
 
+    static var nextDelay:Int = 0;
+
+    /** Waits `ms` before the next step, for third parties that defer work to a frame. */
+    static function thenWait(ms:Int) {
+        then(() -> nextDelay = ms);
+    }
+
     /**
      * One step per turn of the event loop. tracker flushes its autoruns in a
      * microtask, so by the time the next step runs the DOM reflects the
@@ -578,7 +1028,9 @@ class Main implements X {
             failures++;
             js.Syntax.code('console.log({0})', 'FAIL [' + caseName + '] exception: ' + Std.string(e));
         }
-        haxe.Timer.delay(runSteps, 0);
+        final delay = nextDelay;
+        nextDelay = 0;
+        haxe.Timer.delay(runSteps, delay);
 
     }
 
