@@ -25,6 +25,15 @@ class Wisdom implements X {
 
     static final SVG_NS = "http://www.w3.org/2000/svg";
 
+    /**
+     * Selector of a portal vnode: its children are rendered in the element
+     * given as `data.portal` (owned by a third party) while a comment node
+     * keeps the portal's own position in the parent. The children stay in
+     * `vnode.children`, so component liveness and replacement bookkeeping in
+     * ReactiveContext see them like any other part of the tree.
+     */
+    public static inline final PORTAL_SEL = "portal";
+
     final cbs = new ModuleHooks();
 
     public static var renderComponent:RenderComponent = null;
@@ -196,6 +205,34 @@ class Wisdom implements X {
             // textNode has no selector
             vnode.elm = backend.textToNode(backend.createTextNode(vnode.text));
         }
+        else if (sel == PORTAL_SEL) {
+            final host:Node = cast data?.portal;
+            if (host == null) throw 'A portal needs a host element (`into`)';
+            // The placeholder keeps the portal's position in the parent's DOM so
+            // that the sibling insertBefore/nextSibling logic of updateChildren
+            // keeps working. Comments are invisible and ignored by layout.
+            vnode.elm = backend.commentToNode(backend.createComment("portal"));
+            // Modules see a comment node here; they only act when data carries
+            // classes, props, style, attrs or on, which the markup compiler
+            // forbids on <portal>.
+            for (i in 0...cbs.create.length) cbs.create[i](this, EMPTY_NODE, vnode);
+            if (Is.array(children)) {
+                for (i in 0...children.length) {
+                    final ch = children[i];
+                    if (ch != null) {
+                        backend.appendChild(host, createElm(ch, insertedVnodeQueue));
+                    }
+                }
+            }
+            if (hook != null) {
+                final create = hook.create;
+                if (create != null)
+                    create(this, EMPTY_NODE, vnode);
+                if (hook.insert != null) {
+                    insertedVnodeQueue.push(vnode);
+                }
+            }
+        }
         else if (sel != null) {
             // Parse selector
             final hashIdx = sel.indexOf("#");
@@ -287,6 +324,31 @@ class Wisdom implements X {
                     }
                 }
             }
+            if (vnode.sel == PORTAL_SEL) {
+                // The portal's children live in the host, not under the
+                // placeholder: removing the placeholder (or an ancestor) would
+                // leave them behind. Destroy hooks already fired once through
+                // the recursion above, so this only detaches DOM nodes.
+                detachChildrenFromDom(vnode.children);
+            }
+        }
+
+    }
+
+    /**
+     * Removes the elements of `children` from wherever they currently are.
+     * The actual parent is used rather than the host they were appended to:
+     * a third party may have moved them, or already cleared them out.
+     */
+    function detachChildrenFromDom(children:Array<VNode>):Void {
+
+        if (children == null) return;
+        for (i in 0...children.length) {
+            final ch = children[i];
+            if (ch != null && ch.elm != null) {
+                final parent = backend.parentNode(ch.elm);
+                if (parent != null) backend.removeChild(parent, ch.elm);
+            }
         }
 
     }
@@ -323,8 +385,10 @@ class Wisdom implements X {
                         ch.children.length - 1
                     );
                 } else {
-                    // Text node
-                    backend.removeChild(parentElm, ch.elm);
+                    // Text node. Its parent is the host when it is a portal
+                    // child, so ask the node rather than trusting parentElm.
+                    final parent = backend.parentNode(ch.elm);
+                    if (parent != null) backend.removeChild(parent, ch.elm);
                 }
             }
             startIdx++;
@@ -484,26 +548,42 @@ class Wisdom implements X {
         if (!(vnode.data?.unmanaged == true)) {
             final oldCh:Array<VNode> = cast oldVnode.children;
             final ch:Array<VNode> = cast vnode.children;
+            var childrenParent:Node = elm;
+            if (vnode.sel == PORTAL_SEL) {
+                final oldHost:Node = cast oldVnode.data?.portal;
+                final host:Node = cast vnode.data.portal;
+                if (host == null) throw 'A portal needs a host element (`into`)';
+                if (oldHost != host && oldCh != null) {
+                    // Same portal, new host (the third party re-created its
+                    // container): carry the existing children over, elements
+                    // and component state intact.
+                    for (i in 0...oldCh.length) {
+                        final c = oldCh[i];
+                        if (c != null && c.elm != null) backend.appendChild(host, c.elm);
+                    }
+                }
+                childrenParent = host;
+            }
             if (vnode.text == null) {
                 if (oldCh != null && ch != null) {
-                    if (oldCh != ch) updateChildren(elm, oldCh, ch, insertedVnodeQueue);
+                    if (oldCh != ch) updateChildren(childrenParent, oldCh, ch, insertedVnodeQueue);
                 }
                 else if (ch != null) {
-                    if (oldVnode.text != null) backend.setTextContent(elm, "");
-                    addVnodes(elm, null, ch, 0, ch.length - 1, insertedVnodeQueue);
+                    if (oldVnode.text != null) backend.setTextContent(childrenParent, "");
+                    addVnodes(childrenParent, null, ch, 0, ch.length - 1, insertedVnodeQueue);
                 }
                 else if (oldCh != null) {
-                    removeVnodes(elm, oldCh, 0, oldCh.length - 1);
+                    removeVnodes(childrenParent, oldCh, 0, oldCh.length - 1);
                 }
                 else if (oldVnode.text != null) {
-                    backend.setTextContent(elm, "");
+                    backend.setTextContent(childrenParent, "");
                 }
             }
             else if (oldVnode.text != vnode.text) {
                 if (oldCh != null) {
-                    removeVnodes(elm, oldCh, 0, oldCh.length - 1);
+                    removeVnodes(childrenParent, oldCh, 0, oldCh.length - 1);
                 }
-                backend.setTextContent(elm, vnode.text);
+                backend.setTextContent(childrenParent, vnode.text);
             }
         }
         final postpatch = hook?.postpatch;
@@ -840,6 +920,28 @@ class Wisdom implements X {
         var computedXid = xid;
         if (baseXid != null) {
             computedXid = baseXid + xid;
+        }
+
+        if ((sel:String) == PORTAL_SEL) {
+            // A portal has no element of its own: text becomes a text child, and
+            // a portal always has a children array so that patchVnode diffs it
+            // as a list.
+            if (text != null) {
+                children = [VNode.vnode(null, null, null, null, text, null)];
+                text = null;
+            }
+            if (children == null) {
+                children = [];
+            }
+            if (data.portal == null) {
+                throw 'A portal needs a host element (`into`)';
+            }
+            // Auto-key: two portals of a <foreach> must never be paired by
+            // position, or the children of one panel would be moved into
+            // another panel's host.
+            if (data.key == null) {
+                data.key = computedXid;
+            }
         }
 
         return VNode.vnode(computedXid, sel, data, children, text, null);
