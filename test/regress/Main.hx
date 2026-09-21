@@ -78,6 +78,19 @@ class Wrapper extends Component {
 
 }
 
+/** A slot the component itself can hide. */
+class Hider extends Component {
+
+    function render() '<>
+        <div class="hider">
+            <if ${Main.st.flag}>
+                $children
+            </if>
+        </div>
+    ';
+
+}
+
 /** Stateless leaf, like the kit's Icon. */
 class Icon extends Component {
 
@@ -153,6 +166,9 @@ class Main implements X {
         case5_parentDrivenConditionalSibling();
         case6_wrapperForwardingSlot();
         case7_keyedListPassingChildren();
+        case8_componentWithoutAttributes();
+        case9_nestedComponentSurvivesStructuralShift();
+        case10_hiddenSlotDestroysItsComponents();
 
         runSteps();
 
@@ -401,6 +417,104 @@ class Main implements X {
             check('no spacers', count('.spacer') == 0, count('.spacer'));
             check('three titles without spacers', count('.title') == 3, count('.title'));
             check('order kept', titles() == 'c,a,b', titles());
+        });
+        then(finishCase);
+
+    }
+
+    /** A component declaring @props, used with no attribute at all. */
+    static function case8_componentWithoutAttributes() {
+
+        then(() -> start('8 component without attributes', () -> '<>
+            <div class="root">
+                <Icon />
+                <Counter />
+            </div>
+        '));
+        then(() -> {
+            check('icon default kind', count('.icon-circle') == 1, count('.icon-circle'));
+            check('counter rendered', text('.counter') == 'Count: 0', text('.counter'));
+            check('counter default label', container.querySelector('.counter').getAttribute('data-label') == '', container.querySelector('.counter').getAttribute('data-label'));
+            check('instance registered', Counter.last != null, Counter.last);
+        });
+        then(() -> Counter.last.count = 2);
+        then(() -> check('counter live', text('.counter') == 'Count: 2', text('.counter')));
+        then(finishCase);
+
+    }
+
+    /**
+     * A stateful component nested in raw children keeps its instance when a
+     * structural change around the slot pairs its keyless ancestor with a
+     * different sibling. The root is created in its new place and removed
+     * from the old one within the same patch, which must not destroy it.
+     */
+    static function case9_nestedComponentSurvivesStructuralShift() {
+
+        var instance:Counter = null;
+        then(() -> start('9 nested component survives a structural shift', () -> '<>
+            <div class="root">
+                <SlotBar>
+                    <div class="wrap">
+                        <Counter label="nested" />
+                    </div>
+                </SlotBar>
+            </div>
+        '));
+        then(() -> { instance = Counter.last; instance.count = 3; });
+        then(() -> check('state applied', text('.counter') == 'Count: 3', text('.counter')));
+        then(() -> st.inset = false);
+        then(() -> {
+            check('one counter after shift', count('.counter') == 1, count('.counter'));
+            check('same instance after shift', Counter.last == instance, Counter.last == instance);
+        });
+        then(() -> instance.count = 5);
+        then(() -> check('instance live after shift', text('.counter') == 'Count: 5', text('.counter')));
+        then(() -> st.inset = true);
+        then(() -> {
+            check('one counter after shift back', count('.counter') == 1, count('.counter'));
+            check('spacer first after shift back', container.querySelector('.bar').children[0].classList.contains('spacer'), container.querySelector('.bar').children[0].className);
+        });
+        then(() -> instance.count = 6);
+        then(() -> check('instance live after shift back', text('.counter') == 'Count: 6', text('.counter')));
+        then(finishCase);
+
+    }
+
+    /**
+     * Hiding the slot removes its children from the tree, and a component
+     * that is no longer in the tree is destroyed, as it would be under any
+     * `<if>`. Showing the slot again must not duplicate anything nor throw.
+     */
+    static function case10_hiddenSlotDestroysItsComponents() {
+
+        var instance:Counter = null;
+        then(() -> start('10 hidden slot destroys its components', () -> '<>
+            <div class="root">
+                <Hider>
+                    <div class="wrap">
+                        <Counter label="hidden" />
+                    </div>
+                </Hider>
+            </div>
+        '));
+        then(() -> check('hidden at first', count('.counter') == 0, count('.counter')));
+        then(() -> st.flag = true);
+        then(() -> {
+            check('shown', count('.counter') == 1, count('.counter'));
+            instance = Counter.last;
+            instance.count = 3;
+        });
+        then(() -> check('state applied', text('.counter') == 'Count: 3', text('.counter')));
+        then(() -> st.flag = false);
+        then(() -> {
+            check('hidden again', count('.counter') == 0, count('.counter'));
+            check('component destroyed', @:privateAccess ctx.components.exists(instance.xid) == false, @:privateAccess ctx.components.exists(instance.xid));
+        });
+        then(() -> st.flag = true);
+        then(() -> {
+            check('shown again, once', count('.counter') == 1, count('.counter'));
+            check('one wrap', count('.wrap') == 1, count('.wrap'));
         });
         then(finishCase);
 

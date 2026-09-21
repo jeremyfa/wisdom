@@ -128,12 +128,21 @@ class ReactiveContext {
 
     }
 
+    /**
+     * A vnode carrying a component was removed from the DOM. That does not
+     * mean the component is gone: component roots are shared by identity
+     * between the previous tree and the new one, and when a keyless ancestor
+     * gets paired with a different sibling the same root is created again in
+     * its new place while its old place is removed. So we only queue the
+     * component here, and `postAllReactions` decides by looking at the
+     * rendered tree once every reaction has settled. The pointer stays on the
+     * vnode until then, or the tree walk could not find it.
+     */
     function checkRemovedNodeComponent(node:VNode) {
 
         if (node != null && node.reactiveComponent != null && components.exists(node.reactiveComponent.xid)) {
             var reactiveComponent = node.reactiveComponent;
             componentsToCheck.set(reactiveComponent.xid, reactiveComponent);
-            node.reactiveComponent = null;
         }
 
     }
@@ -269,6 +278,13 @@ class ReactiveContext {
                     trace('cleanup: ' + xid + ' (' + Type.getClassName(Type.getClass(comp.compInstance)) + ')');
                     #end
                     components.remove(xid);
+                    // The root may still be referenced by a parent's
+                    // `children`. Detach it from the dead component so
+                    // that a later render treats it as plain markup.
+                    final root = comp.rendered;
+                    if (root != null && root.reactiveComponent == comp) {
+                        root.reactiveComponent = null;
+                    }
                     comp.destroy();
                 }
             }
@@ -277,19 +293,19 @@ class ReactiveContext {
 
     }
 
+    /**
+     * A component is alive when its root is in the rendered tree, and only
+     * then. The `children` a parent hands to a component are not walked:
+     * they describe what the parent offers, and a component that hides its
+     * slot has removed those children from the tree, which destroys them
+     * exactly as an `<if>` around a component does anywhere else.
+     */
     function collectVNodeComponents(vnode:VNode, usedComponents:Map<Xid,ReactiveComponent>):Void {
 
         if (vnode != null) {
             final component = vnode.reactiveComponent;
             if (component != null) {
                 usedComponents.set(component.xid, component);
-                final compChildren = component.children;
-                if (compChildren != null) {
-                    for (j in 0...compChildren.length) {
-                        final compChild = compChildren[j];
-                        collectVNodeComponents(compChild, usedComponents);
-                    }
-                }
             }
             final children = vnode.children;
             if (children != null) {

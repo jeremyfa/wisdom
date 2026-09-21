@@ -145,16 +145,20 @@ class ComponentMacro {
 
                         // Didn't process that prop, add assign expr.
                         // For ordinary @props fields we guard the setter on
-                        // `data.props.exists(name)` so an omitted prop in the
-                        // parent's JSX leaves the field at its Haxe-declared
+                        // `props_.exists(name)` so an omitted prop in the
+                        // parent's markup leaves the field at its Haxe-declared
                         // default instead of clobbering it with `undefined`.
+                        // `data_` and `props_` are the locals declared below:
+                        // a component used with no attribute at all has no
+                        // data, and one used with attributes but no prop has
+                        // no props, and both must leave every default alone.
                         var assignExpr:Expr = switch (name) {
                             case 'children':
                                 null;
                             case 'props' | 'attrs' | 'classes' | 'style' | 'on':
-                                macro @:pos(updateField.pos) this.$name = this.data.$name;
+                                macro @:pos(updateField.pos) this.$name = data_ != null ? data_.$name : null;
                             case _:
-                                macro @:pos(updateField.pos) if (this.data.props.exists($v{name})) this.$name = this.data.props.get($v{name});
+                                macro @:pos(updateField.pos) if (props_ != null && props_.exists($v{name})) this.$name = props_.get($v{name});
                         }
 
                         if (assignExpr != null) {
@@ -164,10 +168,14 @@ class ComponentMacro {
                 }
 
                 if (assignExprs.length > 0) {
+                    final locals:Array<Expr> = [
+                        macro @:pos(updateField.pos) final data_ = this.data,
+                        macro @:pos(updateField.pos) final props_ = data_ != null ? data_.props : null
+                    ];
                     switch (fn.expr.expr) {
                         case EBlock(exprs):
                             fn.expr.expr = EBlock(
-                                exprs.concat(assignExprs)
+                                exprs.concat(locals).concat(assignExprs)
                             );
                         case _:
                     }
