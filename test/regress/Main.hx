@@ -3,6 +3,7 @@ package;
 import js.Browser.document;
 import js.html.Element;
 import tracker.Observable;
+import ui.GoldenLayout;
 import ui.Panel;
 import wisdom.Component;
 import wisdom.HtmlBackend;
@@ -369,6 +370,7 @@ class Main implements X {
         case13_componentLifecycle();
         case14_refFollowsTheElement();
         case15_dockIntegration();
+        case16_goldenLayout();
 
         runSteps();
 
@@ -950,6 +952,101 @@ class Main implements X {
         then(() -> {
             check('mounted again', Dock.mounts == 2, Dock.mounts);
             check('two panels again', count('.panel') == 2, count('.panel'));
+            check('fresh counter', text('.counter') == 'Count: 0', text('.counter'));
+        });
+        then(finishCase);
+
+    }
+
+    /** Golden Layout config for case 16: `notes` is deliberately not part of it. */
+    static final GL_CONFIG:Dynamic = {
+        root: {
+            type: 'row',
+            content: [
+                { type: 'component', componentType: 'editor', title: 'Editor' },
+                { type: 'component', componentType: 'console', title: 'Console' }
+            ]
+        }
+    };
+
+    /**
+     * The real Golden Layout, end to end: panels rendered into the containers
+     * it creates, a parent re-render, a panel opened and one closed through
+     * its API, then the whole layout unmounted and mounted again.
+     */
+    static function case16_goldenLayout() {
+
+        var counterXid:String = null;
+        then(() -> {
+            GoldenLayout.mounts = 0;
+            GoldenLayout.unmounts = 0;
+            Panel.destroyedCount = 0;
+            start('16 golden layout', () -> '<>
+                <div class="root" data-tick=${st.tick}>
+                    <if ${st.flag}>
+                        <GoldenLayout config=$GL_CONFIG>
+                            <Panel name="editor"><Counter label="gl" /></Panel>
+                            <Panel name="console"><div class="con">Console</div></Panel>
+                            <Panel name="notes"><div class="notes">Notes</div></Panel>
+                        </GoldenLayout>
+                    </if>
+                </div>
+            ');
+        });
+        then(() -> st.flag = true);
+        // stackCreated reaches the layout manager on the next animation frame.
+        thenWait(50);
+        then(() -> {
+            check('mounted once', GoldenLayout.mounts == 1, GoldenLayout.mounts);
+            check('two containers', count('.lm_content') == 2, count('.lm_content'));
+            check('editor panel in a container', container.querySelector('.lm_content .panel[data-panel=editor] .counter') != null, container.innerHTML);
+            check('console panel in a container', container.querySelector('.lm_content .panel[data-panel=console] .con') != null, container.innerHTML);
+            check('notes not rendered', count('.notes') == 0, count('.notes'));
+            var allInContainers = true;
+            for (panel in container.querySelectorAll('.panel')) {
+                if ((cast panel:Element).closest('.lm_content') == null) allInContainers = false;
+            }
+            check('every panel inside a container', allInContainers, allInContainers);
+            check('two stacks created', GoldenLayout.last.stacksCreated == 2, GoldenLayout.last.stacksCreated);
+            check('header button per stack', count('.lm_controls .gl-add') == 2, count('.lm_controls .gl-add'));
+            counterXid = Counter.byLabel.get('gl').xid;
+        });
+        then(() -> Counter.byLabel.get('gl').count = 3);
+        then(() -> check('counter updated in container', text('.counter') == 'Count: 3', text('.counter')));
+        then(() -> st.tick++);
+        then(() -> {
+            check('two containers after parent re-render', count('.lm_content') == 2, count('.lm_content'));
+            check('two panels after parent re-render', count('.panel') == 2, count('.panel'));
+            check('counter kept after parent re-render', text('.counter') == 'Count: 3', text('.counter'));
+        });
+        then(() -> GoldenLayout.last.open('notes', 'Notes'));
+        then(() -> {
+            check('three containers after open', count('.lm_content') == 3, count('.lm_content'));
+            check('notes rendered in a container', container.querySelector('.lm_content .notes') != null, count('.notes'));
+        });
+        then(() -> GoldenLayout.last.close('console'));
+        then(() -> {
+            check('console content gone', count('.con') == 0, count('.con'));
+            check('console panel destroyed', Panel.destroyedCount == 1, Panel.destroyedCount);
+            check('two containers after close', count('.lm_content') == 2, count('.lm_content'));
+        });
+        then(() -> {
+            final saved = GoldenLayout.last.gl.saveLayout();
+            check('layout saved', saved != null && saved.root != null, saved);
+        });
+        then(() -> st.flag = false);
+        then(() -> {
+            check('unmounted once', GoldenLayout.unmounts == 1, GoldenLayout.unmounts);
+            check('layout dom gone', count('.lm_goldenlayout') == 0, count('.lm_goldenlayout'));
+            check('no panel left', count('.panel') == 0, count('.panel'));
+            check('remaining panels destroyed', Panel.destroyedCount == 3, Panel.destroyedCount);
+            check('counter destroyed', @:privateAccess ctx.components.exists(counterXid) == false, @:privateAccess ctx.components.exists(counterXid));
+        });
+        then(() -> st.flag = true);
+        thenWait(50);
+        then(() -> {
+            check('mounted again', GoldenLayout.mounts == 2, GoldenLayout.mounts);
+            check('two containers again', count('.lm_content') == 2, count('.lm_content'));
             check('fresh counter', text('.counter') == 'Count: 0', text('.counter'));
         });
         then(finishCase);

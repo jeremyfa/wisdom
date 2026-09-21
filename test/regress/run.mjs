@@ -8,7 +8,9 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const dom = new JSDOM('<!doctype html><html><body></body></html>');
+// pretendToBeVisual gives requestAnimationFrame, which Golden Layout uses to
+// propagate its bubbling events.
+const dom = new JSDOM('<!doctype html><html><body></body></html>', { pretendToBeVisual: true });
 const w = dom.window;
 
 globalThis.window = w;
@@ -17,6 +19,16 @@ globalThis.document = w.document;
 for (const name of ['Node', 'Element', 'HTMLElement', 'Text', 'Comment', 'Event', 'MouseEvent']) {
     globalThis[name] = w[name];
 }
+
+// Golden Layout reaches window APIs through globalThis, and jsdom does not
+// install them there. Bound to the window so `this` is right.
+for (const name of ['addEventListener', 'removeEventListener', 'dispatchEvent', 'getComputedStyle', 'requestAnimationFrame', 'cancelAnimationFrame']) {
+    globalThis[name] = w[name].bind(w);
+}
+// No layout under jsdom: every size is 0 and nothing ever resizes.
+class ResizeObserverStub { constructor() {} observe() {} unobserve() {} disconnect() {} }
+globalThis.ResizeObserver = ResizeObserverStub;
+w.ResizeObserver = ResizeObserverStub;
 
 const require = createRequire(import.meta.url);
 require(join(dirname(fileURLToPath(import.meta.url)), 'out', 'test.js'));
