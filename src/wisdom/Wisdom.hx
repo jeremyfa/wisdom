@@ -272,13 +272,13 @@ class Wisdom implements X {
                 }
             }
             backend.didAppendChildren(elm);
-            if (hook != null) {
-                final create = hook.create;
-                if (create != null)
-                    create(this, EMPTY_NODE, vnode);
-                if (hook.insert != null) {
-                    insertedVnodeQueue.push(vnode);
-                }
+            if (hook != null && hook.create != null) {
+                hook.create(this, EMPTY_NODE, vnode);
+            }
+            // Both the insert hook and `ref` want the element once it is attached,
+            // which is at the end of the patch.
+            if ((hook != null && hook.insert != null) || (data != null && data.ref != null)) {
+                insertedVnodeQueue.push(vnode);
             }
         }
         else {
@@ -316,6 +316,7 @@ class Wisdom implements X {
             if (destroy != null)
                 destroy(this, vnode);
             for (i in 0...cbs.destroy.length) cbs.destroy[i](this, vnode);
+            if (data.ref != null) data.ref(null);
             if (vnode.children != null) {
                 for (j in 0...vnode.children.length) {
                     final child = vnode.children[j];
@@ -670,7 +671,11 @@ class Wisdom implements X {
         }
 
         for (i in 0...insertedVnodeQueue.length) {
-            insertedVnodeQueue[i].data.hook.insert(this, insertedVnodeQueue[i]);
+            final queued = insertedVnodeQueue[i];
+            final queuedData = queued.data;
+            final insert = queuedData.hook?.insert;
+            if (insert != null) insert(this, queued);
+            if (queuedData.ref != null) queuedData.ref(queued.elm);
         }
         for (i in 0...cbs.post.length) cbs.post[i](this);
 
