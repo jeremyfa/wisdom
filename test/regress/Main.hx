@@ -371,6 +371,10 @@ class Main implements X {
         case14_refFollowsTheElement();
         case15_dockIntegration();
         case16_goldenLayout();
+        case17_ifBodyHasItsOwnNamespace();
+        case18_branchesAreDistinct();
+        case19_switchCasesAreDistinct();
+        case20_duplicateXidIsReported();
 
         runSteps();
 
@@ -1048,6 +1052,173 @@ class Main implements X {
             check('mounted again', GoldenLayout.mounts == 2, GoldenLayout.mounts);
             check('two containers again', count('.lm_content') == 2, count('.lm_content'));
             check('fresh counter', text('.counter') == 'Count: 0', text('.counter'));
+        });
+        then(finishCase);
+
+    }
+
+    static function depth(xid:String):Int {
+        return xid.split('/').length;
+    }
+
+    static function parentPrefix(xid:String):String {
+        return xid.substring(0, xid.lastIndexOf('/'));
+    }
+
+    /**
+     * The first child of an <if> used to get the xid of the enclosing element's
+     * first child, and everything after the </if> lost an ancestor segment.
+     */
+    static function case17_ifBodyHasItsOwnNamespace() {
+
+        then(() -> start('17 if body has its own xid namespace', () -> '<>
+            <div class="root">
+                <div class="inner">
+                    <Counter label="outside" />
+                    <if ${st.flag}>
+                        <Counter label="inside" />
+                    </if>
+                    <Counter label="after" />
+                </div>
+            </div>
+        '));
+        then(() -> st.flag = true);
+        then(() -> {
+            check('three counters', count('.counter') == 3, count('.counter'));
+            final outside = Counter.byLabel.get('outside');
+            final inside = Counter.byLabel.get('inside');
+            final after = Counter.byLabel.get('after');
+            check('three instances', outside != null && inside != null && after != null && outside != inside && inside != after && outside != after, Counter.byLabel);
+            check('three xids', outside.xid != inside.xid && inside.xid != after.xid && outside.xid != after.xid, [outside.xid, inside.xid, after.xid]);
+            check('after keeps its depth', depth(outside.xid) == depth(after.xid), [outside.xid, after.xid]);
+            check('after shares the parent prefix', parentPrefix(after.xid) == parentPrefix(outside.xid), [outside.xid, after.xid]);
+            inside.count = 2;
+        });
+        then(() -> {
+            check('inside counted', text('.counter[data-label="inside"]') == 'Count: 2', text('.counter[data-label="inside"]'));
+            check('outside untouched', text('.counter[data-label="outside"]') == 'Count: 0', text('.counter[data-label="outside"]'));
+            check('after untouched', text('.counter[data-label="after"]') == 'Count: 0', text('.counter[data-label="after"]'));
+            Counter.byLabel.get('outside').count = 5;
+        });
+        then(() -> st.flag = false);
+        then(() -> {
+            check('two counters', count('.counter') == 2, count('.counter'));
+            check('outside state kept', text('.counter[data-label="outside"]') == 'Count: 5', text('.counter[data-label="outside"]'));
+            check('after still there', text('.counter[data-label="after"]') == 'Count: 0', text('.counter[data-label="after"]'));
+        });
+        then(() -> st.flag = true);
+        then(() -> {
+            check('three counters again', count('.counter') == 3, count('.counter'));
+            check('inside recreated fresh', text('.counter[data-label="inside"]') == 'Count: 0', text('.counter[data-label="inside"]'));
+            check('outside state still kept', text('.counter[data-label="outside"]') == 'Count: 5', text('.counter[data-label="outside"]'));
+        });
+        then(finishCase);
+
+    }
+
+    /** if / elseif / else bodies are different components, so no state leaks between them. */
+    static function case18_branchesAreDistinct() {
+
+        var yesXid:String = null;
+        then(() -> start('18 if/elseif/else branches are distinct', () -> '<>
+            <div class="root">
+                <if ${st.flag}>
+                    <Counter label="yes" />
+                <elseif ${st.flag2}>
+                    <Counter label="maybe" />
+                <else>
+                    <Counter label="no" />
+                </if>
+            </div>
+        '));
+        then(() -> check('else branch first', text('.counter') == 'Count: 0' && Counter.byLabel.exists('no'), text('.counter')));
+        then(() -> st.flag = true);
+        then(() -> {
+            check('if branch', Counter.byLabel.exists('yes') && count('.counter') == 1, count('.counter'));
+            yesXid = Counter.byLabel.get('yes').xid;
+            Counter.byLabel.get('yes').count = 3;
+        });
+        then(() -> check('yes counted', text('.counter') == 'Count: 3', text('.counter')));
+        then(() -> st.flag = false);
+        then(() -> {
+            check('no state leaked into else', text('.counter') == 'Count: 0', text('.counter'));
+            check('yes destroyed', @:privateAccess ctx.components.exists(yesXid) == false, @:privateAccess ctx.components.exists(yesXid));
+        });
+        then(() -> st.flag2 = true);
+        then(() -> {
+            check('elseif branch fresh', text('.counter') == 'Count: 0' && Counter.byLabel.exists('maybe'), text('.counter'));
+            final a = Counter.byLabel.get('yes').xid;
+            final b = Counter.byLabel.get('maybe').xid;
+            final c = Counter.byLabel.get('no').xid;
+            check('three distinct xids', a != b && b != c && a != c, [a, b, c]);
+        });
+        then(finishCase);
+
+    }
+
+    /** switch cases are distinct, and the depth of what follows the switch is preserved. */
+    static function case19_switchCasesAreDistinct() {
+
+        var tail:Counter = null;
+        then(() -> start('19 switch cases are distinct', () -> '<>
+            <div class="root">
+                <div class="inner">
+                    <Counter label="before" />
+                    <switch ${st.items.length}>
+                        <case 3><Counter label="three" /></case>
+                        <case 2><Counter label="two" /></case>
+                        <default><Counter label="other" /></default>
+                    </switch>
+                    <Counter label="tail" />
+                </div>
+            </div>
+        '));
+        then(() -> {
+            check('three items case', Counter.byLabel.exists('three') && count('.counter') == 3, count('.counter'));
+            tail = Counter.byLabel.get('tail');
+            check('tail keeps its depth', depth(tail.xid) == depth(Counter.byLabel.get('before').xid), [tail.xid, Counter.byLabel.get('before').xid]);
+            Counter.byLabel.get('three').count = 1;
+            tail.count = 7;
+        });
+        then(() -> st.items = ['a', 'b']);
+        then(() -> {
+            check('two items case fresh', Counter.byLabel.exists('two') && text('.counter[data-label="two"]') == 'Count: 0', text('.counter[data-label="two"]'));
+            check('three destroyed', @:privateAccess ctx.components.exists(Counter.byLabel.get('three').xid) == false, count('.counter[data-label="three"]'));
+            check('tail instance kept', Counter.byLabel.get('tail') == tail && text('.counter[data-label="tail"]') == 'Count: 7', text('.counter[data-label="tail"]'));
+        });
+        then(() -> st.items = []);
+        then(() -> {
+            check('default case', Counter.byLabel.exists('other') && count('.counter') == 3, count('.counter'));
+            check('tail still kept', Counter.byLabel.get('tail') == tail && text('.counter[data-label="tail"]') == 'Count: 7', text('.counter[data-label="tail"]'));
+            final a = Counter.byLabel.get('three').xid;
+            final b = Counter.byLabel.get('two').xid;
+            final c = Counter.byLabel.get('other').xid;
+            check('three distinct case xids', a != b && b != c && a != c, [a, b, c]);
+        });
+        then(finishCase);
+
+    }
+
+    /** Two nodes claiming one xid (here through duplicate keys) are reported. */
+    static function case20_duplicateXidIsReported() {
+
+        final messages:Array<String> = [];
+        var prevTrace:Dynamic = null;
+        then(() -> {
+            prevTrace = haxe.Log.trace;
+            haxe.Log.trace = (v:Dynamic, ?infos:haxe.PosInfos) -> messages.push(Std.string(v));
+            start('20 duplicate xid is reported', () -> '<>
+                <div class="root">
+                    <foreach ${['x', 'x']} ${(i:Int, k:String) -> '<>
+                        <key $k />
+                        <Counter label=$k />
+                    '} />
+                </div>
+            ');
+        });
+        then(() -> {
+            haxe.Log.trace = prevTrace;
+            check('collision reported', messages.filter(m -> m.indexOf('share the xid') != -1).length >= 1, messages);
         });
         then(finishCase);
 
