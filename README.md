@@ -417,6 +417,83 @@ This time, the component provides its own state: any argument prefixed with the 
 
 In this example, clicking on the element will trigger an increment of the `count` variable an make the component render itself again, because it is used within a `wisdom.reactive()` call.
 
+## Third-party DOM libraries
+
+Wisdom normally owns every node under a `reactive()` root. Four small primitives let a third-party library (Golden Layout, CodeMirror, Monaco, Leaflet, a canvas...) own part of that DOM without confusing the diff, the component state tracking or the destruction of components.
+
+### `unmanaged`
+
+An element flagged `unmanaged` is created and updated by Wisdom (classes, style, attributes, listeners) but its DOM children are never created, diffed or removed: the library fills the inside.
+
+```xml
+<div class="editor" unmanaged />
+```
+
+Such an element must have no children and no text in the markup. Flipping the flag between renders re-creates the element.
+
+### `<portal into=$host>`
+
+A portal renders its children inside `host`, an element owned by someone else (a Golden Layout container, `document.body` for a modal...), while a comment node keeps its position in the parent. The children stay ordinary Wisdom children: they are diffed in place when the parent re-renders, components inside keep their state, and they are destroyed when the portal goes away, exactly as under an `<if>`.
+
+```xml
+<portal into=${container.element}>
+    <Editor doc=$currentDoc />
+</portal>
+```
+
+A portal only accepts the attributes `into`, `key`, `if` and `unless`. If `into` changes for the same portal, the existing children are moved to the new host, elements and state intact. When the portal is removed, its children are detached from wherever they currently are, so a library that already cleared or moved its container does not break anything. Portals are keyed by their position automatically, so portals produced by a `<foreach>` never get paired with each other.
+
+### `ref`
+
+`ref` follows the life of an element: the callback receives the element once it is attached (at the end of the patch that created it), and `null` when the element is destroyed. Changing the callback between renders does not call anything.
+
+```xml
+<div class="map" unmanaged ref=$bindMap />
+```
+
+### `didMount()` / `willUnmount()` on class components
+
+A class component (`extends wisdom.Component`) rendered through `wisdom.reactive()` can override:
+
+- `didMount(elm)`: the root element is attached to the document. Called again after `willUnmount()` if the root element is re-created (root tag changed, or the root was moved by a structural change in the parent).
+- `willUnmount()`: the root element is about to leave the DOM (it is still attached), or the component is about to be destroyed. Never called twice without a `didMount()` in between. `destroy()` remains the final cleanup and runs after it.
+
+`elm` is the backend's element (`js.html.Element` with `HtmlBackend`), passed as `Any`. Observable writes inside these callbacks are fine with `-D tracker_web_immediate` (the browser setup), where autorun invalidations are deferred to a microtask.
+
+```haxe
+class CodeEditor extends Component {
+
+    var view:EditorView = null;
+
+    function render() '<>
+        <div class="editor" unmanaged />
+    ';
+
+    override function didMount(elm:Any) {
+        view = new EditorView({ parent: elm });
+    }
+
+    override function willUnmount() {
+        view.destroy();
+        view = null;
+    }
+
+}
+```
+
+### A docking layout, end to end
+
+A library that creates containers and asks you to fill them (Golden Layout) combines the four: an unmanaged root handed to the library in `didMount()`, an observable list of the containers it binds, and one portal per container rendering the matching child. The reference implementation lives in `test/regress/ui/GoldenLayout.hx` (externs in `test/regress/glext/`) and is exercised against the real library by the regression suite and by the visual check below. It is used like this:
+
+```xml
+<GoldenLayout config=$layoutConfig>
+    <Panel name="editor"><Editor doc=$currentDoc /></Panel>
+    <Panel name="console"><Console /></Panel>
+</GoldenLayout>
+```
+
+where each `componentType` of the layout config names a `<Panel>` child (`name`, not `id`: `tracker.Entity` already declares `id`).
+
 ## Limitations
 
 ### Roots with single node
@@ -443,7 +520,7 @@ Invalid:
 
 ## Tests
 
-Regression tests run under node on a [jsdom](https://github.com/jsdom/jsdom) document, with the real `HtmlBackend` and modules. They live in `test/regress/`.
+Regression tests run under node on a [jsdom](https://github.com/jsdom/jsdom) document, with the real `HtmlBackend` and modules, and the real [golden-layout](https://github.com/golden-layout/golden-layout) for the docking case. They live in `test/regress/`.
 
 ```sh
 cd test/regress && npm install && cd ../..
@@ -451,6 +528,13 @@ haxe build-test.hxml && node test/regress/run.mjs
 ```
 
 Each check prints `PASS` or `FAIL`, and the process exits with a non-zero code if any check failed.
+
+jsdom does not lay anything out, so `test/visual/` renders the Golden Layout integration in a real Chromium through [Playwright](https://playwright.dev): geometry assertions, a tab drag & drop, and screenshots left in `test/visual/shots/` to look at.
+
+```sh
+haxe build-visual.hxml
+cd test/visual && npm install && npm run build && npm run check
+```
 
 # Credits
 
