@@ -1,0 +1,13 @@
+# Visual check page: the reference Golden Layout component rendered in a real
+# browser by test/visual/check.mjs (Playwright). Bundle out/app.js with esbuild
+# afterwards, see test/visual/package.json.
+-cp src
+-cp test/regress
+-cp test/visual
+--main VisualMain
+--js test/visual/out/app.js
+-D wisdom_html
+-D js-es=6
+--library tracker
+-D tracker_web_immediate
+extraParams.hxml

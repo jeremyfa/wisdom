@@ -4,3 +4,6 @@
 .haxelib
 /test/regress/node_modules
 /test/regress/out
+/test/visual/node_modules
+/test/visual/out
+/test/visual/shots
