@@ -119,6 +119,16 @@ class MarkupToVDom {
 
     var switchHasDefaultCase:Bool = false;
 
+    /**
+     * Branches of the <if> whose body this instance parses: <elseif>/<else>
+     * replace the branch segment of the xid path so their children never share
+     * an xid with the children of the previous branch.
+     */
+    var numBranches:Int = 0;
+
+    /** Same for the <case>/<default> of the <switch> whose body this instance parses. */
+    var numCases:Int = 0;
+
     public var componentTagPos(default, null):Array<Int> = null;
 
     public function new() {}
@@ -138,6 +148,8 @@ class MarkupToVDom {
         this.numIter = numIter;
         this.parent = parent;
         this.afterInnerControl = false;
+        this.numBranches = 0;
+        this.numCases = 0;
 
         parse();
 
@@ -666,6 +678,22 @@ class MarkupToVDom {
                 else if ((isElse || ifExpr != null) && c.charCodeAt(0) == '>'.code) {
                     i++;
 
+                    if (isIf) {
+                        // The <if> owns a slot in its parent's `nodes` (pushed above):
+                        // open a namespace for its body so its first child cannot
+                        // share the xid of the parent's first child, plus a branch
+                        // index so that <elseif>/<else> bodies differ from it too.
+                        // Both segments are popped by parseTagClose.
+                        currentPath.push(Std.string(nodes.length));
+                        currentPath.push('0');
+                    }
+                    else {
+                        // <elseif>/<else> are read by the instance parsing the <if>
+                        // body: replace the branch segment, keep the slot segment.
+                        currentPath.pop();
+                        currentPath.push(Std.string(++numBranches));
+                    }
+
                     if (!isIf) {
                         output.add(' [');
                     }
@@ -740,6 +768,17 @@ class MarkupToVDom {
                 }
                 else if ((switchExpr != null || caseExpr != null) && c.charCodeAt(0) == '>'.code) {
                     i++;
+
+                    // Same namespacing as <if>: the <switch> pushes its slot, each
+                    // <case>/<default> (read by the instance parsing the <switch>
+                    // body) pushes its index. parseTagClose pops one segment for
+                    // each of those tags.
+                    if (isSwitch) {
+                        currentPath.push(Std.string(nodes.length));
+                    }
+                    else {
+                        currentPath.push(Std.string(numCases++));
+                    }
 
                     if (caseExpr != null) {
                         output.add(caseExpr);
@@ -1099,6 +1138,9 @@ class MarkupToVDom {
             if (!ifHasElse) {
                 output.add(' else []');
             }
+            // Branch segment; the slot segment goes with the shared pop below,
+            // which also balances <switch>, <case> and <default>.
+            currentPath.pop();
         }
         else if (tag == 'switch') {
             if (!switchHasDefaultCase) {
