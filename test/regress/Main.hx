@@ -461,8 +461,10 @@ class Main implements X {
                 </SlotBar>
             </div>
         '));
-        then(() -> { instance = Counter.last; instance.count = 3; });
-        then(() -> check('state applied', text('.counter') == 'Count: 3', text('.counter')));
+        // The shift happens BEFORE the nested component ever re-renders on
+        // its own, so its root is the very object the parent captured and
+        // no stale reference can keep it alive by accident.
+        then(() -> instance = Counter.last);
         then(() -> st.inset = false);
         then(() -> {
             check('one counter after shift', count('.counter') == 1, count('.counter'));
