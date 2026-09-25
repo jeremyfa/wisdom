@@ -16,6 +16,25 @@ class XMacro {
     // expensive operations when an error happens
     static var macroHasErrors:Bool = false;
 
+    /**
+     * Whether this compilation serves an editor (`--display`), asked of the
+     * compilation that is actually running.
+     *
+     * A compile-time `#if display` cannot answer that here: the compilation
+     * server compiles the macro context once and reuses it across requests,
+     * so the branch would stay frozen in the mode of whichever compilation
+     * came first -- for an editor that warms its cache with a normal build,
+     * build mode. Markup would then be converted to code during completion,
+     * and a half-typed `${expr.}` would not parse, breaking completion in
+     * the whole file.
+     *
+     * `completion` is still honoured for tools that pass `-D completion` to
+     * work around older versions of this check.
+     */
+    static function isDisplay():Bool {
+        return Context.defined("display") || Context.defined("completion");
+    }
+
     macro static public function makePropsObservable():Void {
 
         #if tracker
@@ -27,37 +46,31 @@ class XMacro {
     macro static public function build():Array<Field> {
 
         var fields = Context.getBuildFields();
+        final display = isDisplay();
 
         for (field in fields) {
 
             switch field.kind {
                 case FVar(t, e):
-                    #if !(completion || display)
-                    if (e != null)
+                    if (e != null && !display)
                         field.kind = FVar(t, processInlineMarkup(e));
-                    #end
 
                 case FProp(get, set, t, e):
-                    #if !(completion || display)
-                    if (e != null) {
+                    if (e != null && !display) {
                         field.kind = FProp(get, set, t, processInlineMarkup(e));
                     }
-                    #end
 
                 case FFun(f):
                     var stateFields:Map<String,FunctionArg> = null;
                     if (hasXMeta(field.meta)) {
                         stateFields = transformWisdomComponent(field);
                     }
-                    #if !(completion || display)
-                    f.expr = processInlineMarkup(f.expr);
-                    #end
-
-                    #if !(completion || display)
-                    if (stateFields != null) {
-                        f.expr = processStateFields(f.expr, stateFields);
+                    if (!display) {
+                        f.expr = processInlineMarkup(f.expr);
+                        if (stateFields != null) {
+                            f.expr = processStateFields(f.expr, stateFields);
+                        }
                     }
-                    #end
 
             }
 
@@ -105,10 +118,14 @@ class XMacro {
 
             case FFun(fn):
 
-                #if !(completion || display)
+                // In display mode the declared arguments stay as written, so the
+                // editor sees `(label:String, count:Int)` rather than the
+                // `(xid_, ctx_, data_, children)` the component compiles to.
+                final building = !isDisplay();
+
                 // Convert arguments
                 var rawArgs = fn.args;
-                fn.args = [{
+                if (building) fn.args = [{
                     name: 'xid_',
                     type: macro :wisdom_.Xid
                 },
@@ -124,7 +141,6 @@ class XMacro {
                     name: 'children',
                     type: macro :Array<wisdom_.VNode>
                 }];
-                #end
 
                 // Add return if needed
                 switch (fn.expr.expr) {
@@ -155,73 +171,72 @@ class XMacro {
                         }]);
                 }
 
-                #if !(completion || display)
-
-                var printer = new haxe.macro.Printer();
-
-                // Add arguments destructuration
-                var argExprs = [];
-                for (i in 0...rawArgs.length) {
-                    var arg = rawArgs[i];
-                    var argNameRaw = arg.name;
-                    var argName = argNameRaw;
-                    var argType = arg.type != null ? printer.printComplexType(arg.type) : 'Dynamic';
-                    while (argName.startsWith('_')) argName = argName.substr(1);
-                    switch (argName) {
-                        case 'children':
-                            // Nothing to do here
-                        case 'props' | 'attrs' | 'classes' | 'style' | 'on':
-                            argExprs.push(
-                                Context.parse('var ${argNameRaw}:${argType} = data_.${argName}', field.pos)
-                            );
-                        case _ if (hasStateMeta(arg.meta)):
-                            if (stateFields == null) stateFields = new Map();
-                            stateFields.set(argName, arg);
-                        case _:
-                            argExprs.push(
-                                Context.parse('var ${argNameRaw}:${argType} = data_.props.get("' + argName + '")', field.pos)
-                            );
-                    }
-                }
-
-                if (stateFields != null) {
+                if (building) {
 
                     var printer = new haxe.macro.Printer();
 
-                    var initState = [];
-                    initState.push('if (state_ == null) {');
-                    initState.push('    state_ = ctx_.initState(xid_);');
-                    for (name => arg in stateFields) {
-                        if (arg.value != null) {
-                            var typeStr = ComplexTypeTools.toString(arg.type);
-                            initState.push('    final state_def_${name}_:$typeStr = ${printer.printExpr(arg.value)};');
-                            initState.push('    state_.set("${name}", state_def_${name}_);');
+                    // Add arguments destructuration
+                    var argExprs = [];
+                    for (i in 0...rawArgs.length) {
+                        var arg = rawArgs[i];
+                        var argNameRaw = arg.name;
+                        var argName = argNameRaw;
+                        var argType = arg.type != null ? printer.printComplexType(arg.type) : 'Dynamic';
+                        while (argName.startsWith('_')) argName = argName.substr(1);
+                        switch (argName) {
+                            case 'children':
+                                // Nothing to do here
+                            case 'props' | 'attrs' | 'classes' | 'style' | 'on':
+                                argExprs.push(
+                                    Context.parse('var ${argNameRaw}:${argType} = data_.${argName}', field.pos)
+                                );
+                            case _ if (hasStateMeta(arg.meta)):
+                                if (stateFields == null) stateFields = new Map();
+                                stateFields.set(argName, arg);
+                            case _:
+                                argExprs.push(
+                                    Context.parse('var ${argNameRaw}:${argType} = data_.props.get("' + argName + '")', field.pos)
+                                );
                         }
                     }
-                    initState.push('}');
 
-                    switch (fn.expr.expr) {
-                        case EBlock(exprs):
-                            fn.expr.expr = EBlock([Context.parse(initState.join('\n'), field.pos)].concat(exprs));
-                        default:
+                    if (stateFields != null) {
+
+                        var printer = new haxe.macro.Printer();
+
+                        var initState = [];
+                        initState.push('if (state_ == null) {');
+                        initState.push('    state_ = ctx_.initState(xid_);');
+                        for (name => arg in stateFields) {
+                            if (arg.value != null) {
+                                var typeStr = ComplexTypeTools.toString(arg.type);
+                                initState.push('    final state_def_${name}_:$typeStr = ${printer.printExpr(arg.value)};');
+                                initState.push('    state_.set("${name}", state_def_${name}_);');
+                            }
+                        }
+                        initState.push('}');
+
+                        switch (fn.expr.expr) {
+                            case EBlock(exprs):
+                                fn.expr.expr = EBlock([Context.parse(initState.join('\n'), field.pos)].concat(exprs));
+                            default:
+                        }
+
+                        switch (fn.expr.expr) {
+                            case EBlock(exprs):
+                                fn.expr.expr = EBlock([Context.parse('var state_ = ctx_.getState(xid_)', field.pos)].concat(exprs));
+                            default:
+                        }
+
+                        fn.expr = processStateFields(fn.expr, stateFields);
                     }
 
                     switch (fn.expr.expr) {
                         case EBlock(exprs):
-                            fn.expr.expr = EBlock([Context.parse('var state_ = ctx_.getState(xid_)', field.pos)].concat(exprs));
+                            fn.expr.expr = EBlock(argExprs.concat(exprs));
                         default:
                     }
-
-                    fn.expr = processStateFields(fn.expr, stateFields);
                 }
-
-                switch (fn.expr.expr) {
-                    case EBlock(exprs):
-                        fn.expr.expr = EBlock(argExprs.concat(exprs));
-                    default:
-                }
-
-                #end
         }
 
         return stateFields;
@@ -391,14 +406,15 @@ class XMacro {
     }
 
     static function processMarkupString(s:String, kind:StringLiteralKind, pos:Position):Expr {
+        final display = isDisplay();
         if (!macroHasErrors) {
             final markup2vdom = new MarkupToVDom();
             final offset = s.startsWith("<>") ? 2 : 0;
             try {
                 var res = markup2vdom.convert(offset > 0 ? s.substr(offset) : s);
-                #if !(completion || display)
-                res = '{wisdom_.Wisdom.begin(); final vdom_ = $res; wisdom_.Wisdom.end(); vdom_;}';
-                #end
+                if (!display) {
+                    res = '{wisdom_.Wisdom.begin(); final vdom_ = $res; wisdom_.Wisdom.end(); vdom_;}';
+                }
                 #if wisdom_print_vnode_haxe
                 @:privateAccess if (markup2vdom.output != null) {
                     trace(markup2vdom.output.toString());
@@ -407,9 +423,9 @@ class XMacro {
                 for (i in markup2vdom.componentTagPos) {
                     s = s.substring(0, i + offset) + "$" + s.substring(i + offset + 1);
                 }
-                #if !(completion || display)
-                return Context.parse(res, pos);
-                #end
+                if (!display) {
+                    return Context.parse(res, pos);
+                }
             }
             catch (e:MarkupToVDom.MarkupToVDomError) {
                 @:privateAccess if (markup2vdom.output != null) {
@@ -427,15 +443,18 @@ class XMacro {
                 );
             }
         }
-        #if !(completion || display)
-        return Context.parse('null', pos);
-        #else
+        if (!display) {
+            return Context.parse('null', pos);
+        }
+
+        // In display mode the markup stays an interpolated string, so the
+        // compiler types every `${...}` in it as ordinary Haxe -- which is what
+        // gives completion and hover inside the markup's expressions.
         var resExpr:Expr = {
             expr: EConst(CString(s, kind)),
             pos: pos
         };
         return macro cast $resExpr;
-        #end
 
     }
 
