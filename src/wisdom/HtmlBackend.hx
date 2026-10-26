@@ -183,7 +183,14 @@ class HtmlBackend extends Backend {
         }
 
         final elmHtml:js.html.Element = cast elm;
-        Reflect.setField(elmHtml.style, name, value);
+        if (StringTools.startsWith(name, '--')) {
+            // Custom properties have no accessor on CSSStyleDeclaration, so a
+            // plain field assignment would be silently ignored.
+            elmHtml.style.setProperty(name, value);
+        }
+        else {
+            Reflect.setField(elmHtml.style, name, value);
+        }
 
     }
 
@@ -194,7 +201,17 @@ class HtmlBackend extends Backend {
         #end
 
         final elmHtml:js.html.Element = cast elm;
-        Reflect.deleteField(elmHtml.style, name);
+        if (StringTools.startsWith(name, '--')) {
+            elmHtml.style.removeProperty(name);
+        }
+        else {
+            // Style properties are accessors on the CSSStyleDeclaration
+            // prototype, so deleting the field does nothing and the inline
+            // value stays. Assigning an empty string clears it, for camelCase
+            // names (from object literals) and dashed names (from a declaration
+            // string) alike.
+            Reflect.setField(elmHtml.style, name, '');
+        }
 
     }
 

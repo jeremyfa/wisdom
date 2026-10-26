@@ -42,6 +42,12 @@ class State implements Observable {
     /** Read by the root render of the lifecycle case: hides a component. */
     @observe public var flag2:Bool = false;
 
+    /** Read by the style case: an inline style given as an object. */
+    @observe public var styleObj:Dynamic = null;
+
+    /** Read by the style case: an inline style given as a declaration string. */
+    @observe public var styleText:String = null;
+
 }
 
 /**
@@ -376,6 +382,7 @@ class Main implements X {
         case19_switchCasesAreDistinct();
         case20_duplicateXidIsReported();
         case21_userKeyNeverMatchesAPositionalIndex();
+        case22_droppedStylesAreCleared();
 
         runSteps();
 
@@ -1262,6 +1269,57 @@ class Main implements X {
         then(() -> {
             check('keyed state isolated', text('.counter[data-label="keyed-two"]') == 'Count: 4', text('.counter[data-label="keyed-two"]'));
             check('positional sibling untouched', text('.counter[data-label="second"]') == 'Count: 0', text('.counter[data-label="second"]'));
+        });
+        then(finishCase);
+
+    }
+
+    /**
+     * A property the new style no longer has must be cleared on the element.
+     * Style properties are accessors on the CSSStyleDeclaration prototype, so
+     * deleting the field used to leave the old inline value in place, and a
+     * reused element kept the styles of what it rendered before. Covers the
+     * object and string forms, and custom properties, which only
+     * `setProperty` / `removeProperty` reach.
+     */
+    static function case22_droppedStylesAreCleared() {
+
+        then(() -> start('22 dropped styles are cleared', () -> '<>
+            <div class="root">
+                <div class="obj" style=${st.styleObj}></div>
+                <div class="str" style=${st.styleText}></div>
+            </div>
+        '));
+        // `start` makes a fresh State, so the styles are set once mounted.
+        then(() -> {
+            st.styleObj = { color: 'red', fontSize: '20px' };
+            st.styleText = 'color: red; font-size: 20px; --x: 1';
+        });
+        then(() -> {
+            final obj:Dynamic = container.querySelector('.obj');
+            final str:Dynamic = container.querySelector('.str');
+            check('object color set', obj.style.color == 'red', obj.style.color);
+            check('string color set', str.style.color == 'red', str.style.color);
+            check('custom property set', str.style.getPropertyValue('--x') == '1', str.style.getPropertyValue('--x'));
+            st.styleObj = { fontSize: '20px' };
+            st.styleText = 'font-size: 20px';
+        });
+        then(() -> {
+            final obj:Dynamic = container.querySelector('.obj');
+            final str:Dynamic = container.querySelector('.str');
+            check('object color cleared', obj.style.color == '', obj.style.color);
+            check('object font size kept', obj.style.fontSize == '20px', obj.style.fontSize);
+            check('string color cleared', str.style.color == '', str.style.color);
+            check('string font size kept', str.style.fontSize == '20px', str.style.fontSize);
+            check('custom property cleared', str.style.getPropertyValue('--x') == '', str.style.getPropertyValue('--x'));
+            st.styleObj = null;
+            st.styleText = '';
+        });
+        then(() -> {
+            final obj:Dynamic = container.querySelector('.obj');
+            final str:Dynamic = container.querySelector('.str');
+            check('object style empty', obj.style.length == 0, obj.getAttribute('style'));
+            check('string style empty', str.style.length == 0, str.getAttribute('style'));
         });
         then(finishCase);
 
