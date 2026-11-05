@@ -378,12 +378,12 @@ class XMacro {
                 switch expr.expr {
                     case EConst(CString(s, kind)):
                         final expr = processMarkupString(s, kind, e.pos);
-                        return macro $expr;
+                        return macro @:wisdomMarkup $expr;
                     case _:
                 }
             case EConst(CString(s, kind)) if (s.startsWith("<>") && kind == SingleQuotes):
                 final expr = processMarkupString(s, kind, e.pos);
-                return macro $expr;
+                return macro @:wisdomMarkup $expr;
             case EDisplay(expr, displayKind):
                 return e;
             case _:

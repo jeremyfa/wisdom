@@ -218,18 +218,15 @@ class ComponentMacro {
 
                 fn.ret = macro :wisdom_.VNode;
 
-                // Add return if needed
+                // Add return if needed. The markup is still a string if this macro
+                // runs before XMacro (Haxe 4), or already converted by XMacro (Haxe 5).
                 switch (fn.expr.expr) {
-                    case EBlock(exprs) if (exprs.length == 1):
-                        switch (exprs[0].expr) {
-                            case EConst(CString(_, _)):
-                                exprs[0].expr = EReturn({
-                                    pos: exprs[0].pos,
-                                    expr: exprs[0].expr
-                                });
-                            default:
-                        }
-                    case EConst(CString(_, _)):
+                    case EBlock(exprs) if (exprs.length == 1 && isMarkup(exprs[0])):
+                        exprs[0].expr = EReturn({
+                            pos: exprs[0].pos,
+                            expr: exprs[0].expr
+                        });
+                    case _ if (isMarkup(fn.expr)):
                         fn.expr.expr = EReturn({
                             pos: fn.expr.pos,
                             expr: fn.expr.expr
@@ -246,6 +243,16 @@ class ComponentMacro {
                             expr: fn.expr.expr
                         }]);
                 }
+        }
+
+    }
+
+    static function isMarkup(e:Expr):Bool {
+
+        return switch e.expr {
+            case EConst(CString(_, _)): true;
+            case EMeta({name: ':wisdomMarkup'}, _): true;
+            case _: false;
         }
 
     }
